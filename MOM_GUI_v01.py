@@ -1,32 +1,17 @@
 ##############################
 #
-#    MOM_Processor_v05.py - RAM, June 27, 2023
+#    MOM_GUI_v01.py - RAM, June 28, 2023
 #       Builds on 4, but allows user to change the values for the standardized weights
+#           Origin: Liam Taylor's first non-GUI code
+#       Features: 
+#           New Interface
+#           output info - most recenet info is at top of the text boxes
+#           user-enterable calibration weights
+#           use only 3 buttons - standard actions
+#               old button code is still there for when we need it
 #       
 #########
 ##############################
-
-
-
-##############################
-#
-#    MOM_Processor_v03.py
-#       Builds on 2 to let us quickly measure durations of bird on the tunnel
-#            replaces Multiple Files button temporarily with Get Times button
-#            can easily repplace Multiple files
-#       new file because it will eventually also turn into class based system
-#########
-##############################
-#
-#    MOM_Processor_v02.py
-#       Duplicated _v01 on Aug 21 because have confused my github setup and v01 was not merged with older version
-#       this allows me to start fresh with tracking. Probably a better way to do this, but...
-#########
-
-########
-# Changes from previous MOM_Processor_v01 on github as of Aug 21:
-#   Full GUI interface with same functionality as Liam's original lhsp_mom_viewer
-#################################
 
 ########
 # import libraries, etc.
@@ -113,10 +98,10 @@ def Set_Globals():
 ########
 
     if(True):
-        exec(open("set_user_values.py").read())  # feature request - make this accessible from within the app itself for changes
+        exec(open("MOM_GUI_set_user_values.py").read())  # feature request - make this accessible from within the app itself for changes
         print("Done setting defaults: "+str(cal1_value)+", "+str(cal2_value)+", "+str(cal3_value))
     else:
-        read_defaults_from_file()
+        read_defaults_from_file()  ## someday we will do this differently
 
 
 
