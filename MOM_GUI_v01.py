@@ -65,6 +65,8 @@ def Set_Globals():
     global birds_datetime_ends
     global birds_data_means
     global birds_cal_means
+    global birds_baseline_diff
+    global birds_regression_mass
     global birds_details
 
     global myDir
@@ -87,7 +89,10 @@ def Set_Globals():
     birds_datetime_ends = []
     birds_data_means = []
     birds_cal_means = []
+    birds_baseline_diff = []
+    birds_regression_mass = []
     birds_details = []
+
 
     aDefaults = []  # will be used when we transition to non-python user default settings
 
@@ -725,7 +730,6 @@ def my_Do_Calibrations(my_dataframe):
     cal3_mean, cal3_markers, cal3_Good, axesLimits = getTracePointPair(data, "Cal3[{}]".format(cal3_value), markers, axesLimits)
     markers = pd.concat([markers, cal3_markers])
 
-
     # Clean up the marked calibration points data
     calibrations = pd.DataFrame({"Category":["Cal1", "Cal2", "Cal3"],
                                     "Value_True":[cal1_value, cal2_value, cal3_value],
@@ -802,6 +806,10 @@ def Do_Bird(my_DataFrame):
         measure_start = bird_data_markers[bird_data_markers["Point"]=="Start"].Datetime.iloc[0]
         measure_end = bird_data_markers[bird_data_markers["Point"]=="End"].Datetime.iloc[0]
 
+        # Calculate the baseline and regressed mass estimates for the birds
+        bird_baseline_diff = abs(bird_data_mean - bird_cal_mean)
+        bird_regression_mass = bird_baseline_diff * cal_gradient + cal_intercept
+
         # Allow the user to input extra details for a "Notes" column
         # bird_details = input("Enter any details about the bird:     ")
         bird_details = "None"
@@ -811,9 +819,11 @@ def Do_Bird(my_DataFrame):
         birds_datetime_ends.append(measure_end)
         birds_data_means.append(bird_data_mean)
         birds_cal_means.append(bird_cal_mean)
+        birds_baseline_diff.append(bird_baseline_diff)
+        birds_regression_mass.append(bird_regression_mass)
         birds_details.append(bird_details)
+
         print("Bird Mass: ")
-        my_result = round(((bird_data_mean - bird_cal_mean) * cal_gradient + cal_intercept),2)
         ## my_duration = (bird_data_markers["Point"]=="End"])-(bird_data_markers["Point"]=="Start"])
         #### try this
        #  print("Try start: " + measure_start.time())
@@ -827,24 +837,15 @@ def Do_Bird(my_DataFrame):
             my_Eval = "G"
         else:
             my_Eval = "B"
-        print(my_result)
+        print(bird_regression_mass)
 
         my_time = my_time + ", " + my_Eval
-        
 
-        print(my_result)  ## reverse this
-        t3.insert("1.0", "\t" +str(my_result) + "," + str(my_time) + "\n") #4 add to Text widget
+        print(bird_regression_mass)  ## reverse this
+        t3.insert("1.0", "\t" +str(bird_regression_mass) + "," + str(my_time) + "\n") #4 add to Text widget
         t3.insert("1.0", "\tTime ON:\t" + str(my_time) + "\n") #3 add to Text widget
-        t3.insert("1.0", "\tBird Mass: \t" + str(my_result) + "\n") #2 add to Text widget
+        t3.insert("1.0", "\tBird Mass: \t" + str(bird_regression_mass) + "\n") #2 add to Text widget
         t3.insert("1.0", "File: " + user_BURROW + " - Weight Calculation:" + "\n") # 1 add to Text widget
-
-        
-
-        
-
-        
-
-
 
         #t2.insert(1.0, "File: " + user_BURROW + "\n") # add to Text widget
         #t2.insert(1.0, "\tBird Mass: \t" + str(my_result) + "\n") # add to Text widget
@@ -869,22 +870,19 @@ def Do_Multiple_Birds(my_DataFrame):
 
     # Done entering bird data
     #   Make the accumulated bird info into a clean dataframe for exporting
-    
     birds = pd.DataFrame({"Burrow":user_BURROW,
-                            "Date":data_DATE,
-                            "Datetime_Measure_Start":birds_datetime_starts,
-                            "Datetime_Measure_End":birds_datetime_ends,
-                            "Mean_Data_Strain":birds_data_means,
-                            "Mean_Calibration_Strain":birds_cal_means,
-                            "Details":birds_details})
+                          "Date":data_DATE,
+                          "Datetime_Measure_Start":birds_datetime_starts,
+                          "Datetime_Measure_End":birds_datetime_ends,
+                          "Mean_Data_Strain":birds_data_means,
+                          "Mean_Calibration_Strain":birds_cal_means,
+                          "Baseline_Difference":birds_baseline_diff,
+                          "Regression_Mass":birds_regression_mass,
+                          "Details":birds_details})
 
     # # Convert the Datetime columns back to character strings for exporting
     # birds["Datetime_Measure_Start"] = birds["Datetime_Measure_Start"].dt.strftime("%Y-%m-%d %H:%M:%S")
     # birds["Datetime_Measure_End"] = birds["Datetime_Measure_End"].dt.strftime("%Y-%m-%d %H:%M:%S")
-
-    # Calculate the baseline and regressed mass estimates for the birds
-    birds["Baseline_Difference"] = abs(birds["Mean_Data_Strain"] - birds["Mean_Calibration_Strain"]) 
-    birds["Regression_Mass"] = birds["Baseline_Difference"] * cal_gradient + cal_intercept
 
     print("Bird calculated masses: ")
     print(birds["Regression_Mass"])
