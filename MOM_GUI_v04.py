@@ -1,14 +1,8 @@
 ﻿##############################
 #
-#    MOM_GUI_v01.py - RAM, June 28, 2023
-#       Builds on 4, but allows user to change the values for the standardized weights
-#           Origin: Liam Taylor's first non-GUI code
-#       Features: 
-#           New Interface
-#           output info - most recenet info is at top of the text boxes
-#           user-enterable calibration weights
-#           use only 3 buttons - standard actions
-#               old button code is still there for when we need it
+#    MOM_GUI_v04.py - RAM, January 29, 2024
+#       Builds on v_01:3
+#       trying new stuff and don't want to corrupt v_03
 #       
 #########
 ##############################
@@ -132,6 +126,14 @@ def read_defaults_from_file():
 #
 ########
 
+############
+# open_dialog
+####
+def open_dialog(myTitle, myInfo):
+    mb.showinfo(myTitle, myInfo)
+
+
+
 
 ############
 # confirm_continue: a utility function to get response via click
@@ -175,7 +177,7 @@ output_width = myWidth - 2 * 10
 
 
 ###################
-# Button FRAME
+# Button FRAME for calibration
 ##
 
 # Create the button frame with a 1-pixel border
@@ -212,7 +214,7 @@ buttons.append(b4)
 
 
 ###################
-# INPUT FRAME
+# INPUT FRAME for calibration
 ##
 
 # important variables
@@ -233,6 +235,34 @@ for i, label in enumerate(my_entry_labels_02):
     entry.grid(row=1, column=i, padx=5, pady=5)
     entry.insert(0, my_entry_labels_02[i])
     my_entries2.append(entry)
+
+    
+# Add vertical space
+tk.Frame(root, height=30).pack()
+
+
+###################
+# INPUT FRAME for reading frame
+##
+
+# important variables
+myButtonPadX = 30
+myButtonPadY = 5
+
+# Create the input frame with a border
+inputFrame_AUTO = tk.Frame(root, width=myWidth-10, bd=1, relief=tk.SOLID)
+inputFrame_AUTO.pack()
+
+# Create labels and entry widgets in a grid
+my_entry_terms_AUTO = ["Min Pts:", "Diff between Pts:", "STD DEV:"]
+my_entry_labels_AUTO = [str(7), str(400), str(200)]
+my_entries2_AUTO= []
+for i, label in enumerate(my_entry_labels_AUTO):
+    tk.Label(inputFrame_AUTO, text=my_entry_terms_AUTO[i]).grid(row=0, column=i, padx=myButtonPadX, pady=myButtonPadY)
+    entry_AUTO = tk.Entry(inputFrame_AUTO)
+    entry_AUTO.grid(row=1, column=i, padx=5, pady=5)
+    entry_AUTO.insert(0, my_entry_labels_AUTO[i])
+    my_entries2_AUTO.append(entry_AUTO)
 
     
 # Add vertical space
@@ -287,8 +317,28 @@ def mom_cut_button():
     # print(my_entry_labels_02)
     # print(float(my_entry_labels_02[1]))
     ##
-    my_Continue == my_Do_Calibrations(bird_df)
+    global cal_gradient
+    global cal_intercept
+
+
+    if 'cal_gradient' in globals():
+
+        print("Cal gradent and intercept:")
+        print (str(cal_gradient))
+        print (str(cal_intercept))
+
+
+        if(confirm_continue("Use last bird calibration?")):
+            my_Continue = True
+        else:
+            my_Continue == my_Do_Calibrations(bird_df)
+
+    else:
+        my_Continue == my_Do_Calibrations(bird_df)
+
+    # my_Continue == my_Do_Calibrations(bird_df)
     #  print(my_Continue)
+
     if(my_Continue):
         Do_Multiple_Birds(bird_df)
         
@@ -649,13 +699,16 @@ def getTracePointPair(my_df, category, markers=None, axesLimits=None):
 
     # Create a new variable as a pandas Series
     # measures_series = pd.Series(measures, name='Measures Series')
-   
+    print("before doing means")
     
     if category == "Bird Data":
         measures_series = pd.Series(measures, name='Measures Series')
+
         mean = calc_Mean_Measure_Consec(measures_series, 400,7)
     else:
         mean = statistics.mean(measures)
+
+    print("after doing means")
 
     # Extract the axes limits for the final interactive plot view
     # in case the user wants to use those limits to restore the view on the next plot
@@ -815,8 +868,12 @@ def generate_final_series(input_array, threshold=5, myLen=4):
 ########
 def calc_Mean_Measure_Consec(mydf, threshold = 400, myLen = 7):
 
+  
+    ## Get what is on screen - might eliminate them as arguments
+    threshold = float(my_entries2_AUTO[1].get())
+    myLen = float(my_entries2_AUTO[0].get())
 
-   # Convert the Pandas Series to a NumPy array
+       # Convert the Pandas Series to a NumPy array
     measures_array = mydf.values
    
     # Get a new list of values within threshold
@@ -825,25 +882,41 @@ def calc_Mean_Measure_Consec(mydf, threshold = 400, myLen = 7):
     # Create a new series composed of values in the fourth series that are > 0 - can I do this 
     filtered_final_series = steady_points[steady_points > 0]
 
+    # Get the size of the array
+    array_size = filtered_final_series.size
+
+    print(f"SIZE OF ARRAY: {array_size}")
+
+    if(array_size == 0):
+        open_dialog("Error","Too few qualifying points.")
+        return (0)
+
     # Take those points that qualify and get their mean and return it
     myMean = np.mean(filtered_final_series)
 
-        ## print info for debugging:
+    ###### print info for debugging:
     # Count
     count = np.count_nonzero(filtered_final_series)
 
     # Range
     range_value = np.max(filtered_final_series) - np.min(filtered_final_series)
 
+    # mean distance
+    Diff_series = np.zeros_like(filtered_final_series, dtype=int)
+    for i in range(1, len(Diff_series) -1):
+        Diff_series[i]= abs(filtered_final_series[i]- filtered_final_series[i + 1])
+    mean_Diff = np.mean(Diff_series)
+
     # Standard Deviation (STD)
     std_value = np.std(filtered_final_series)
 
     print(f"Mean: {myMean}")
     print(f"Count: {count}")
+    print(f"MeanDiff: {mean_Diff}")
     print(f"Range: {range_value}")
     print(f"Standard Deviation: {std_value}")
 
-    #print(f"Count: {count}, Range: {range_value}, Standard Deviation: {std_value}")
+    ############ END of debugging print
 
     return myMean
 
@@ -865,7 +938,7 @@ def annotateCurrentMarkers(markers):
             ax.annotate(label, (index, df.loc[index, "Measure"]), rotation=60)
 
 ################
-# Function my_Do_Calibrations get the calibration for the MOM on this burrow-night
+# Function ƒ get the calibration for the MOM on this burrow-night
 #    RAM 7/25/22
 #    parameters: my_dataframe -> data to work with
 #       - 
@@ -976,14 +1049,14 @@ def my_Do_Calibrations(my_dataframe):
 #############################
 # Function Do_Birds: get the calibration and bird weight data for a single bird in a MOM file
 #    RAM 7/25/22
+#    Update 1/28/2024 to use old calibration if wanted
 #    parameters: NONE 
 #    returns: NONE
 #######
 def Do_Bird(my_DataFrame):
-    
-        # If the user wants to a bird, first get the calibration points for that bird
-        bird_cal_mean, bird_cal_markers, bird_cal_good, bird_cal_axesLimits = getTracePointPair(my_DataFrame, "Calibration[Bird]")
 
+
+        bird_cal_mean, bird_cal_markers, bird_cal_good, bird_cal_axesLimits = getTracePointPair(my_DataFrame, "Calibration[Bird]")
         bird_data_mean, bird_data_markers, bird_data_good, bird_data_axesLimits = getTracePointPair(my_DataFrame, "Bird Data", bird_cal_markers, bird_cal_axesLimits)
         measure_start = bird_data_markers[bird_data_markers["Point"]=="Start"].Datetime.iloc[0]
         measure_end = bird_data_markers[bird_data_markers["Point"]=="End"].Datetime.iloc[0]
@@ -1288,3 +1361,4 @@ class AxesLimits():
 
 
 root.mainloop()
+

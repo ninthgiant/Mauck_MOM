@@ -644,6 +644,14 @@ def getTracePointPair(my_df, category, markers=None, axesLimits=None):
     measures = data.loc[index_start:index_end,"Measure"]
     mean = statistics.mean(measures)
 
+    # Add new function to replace the simple mean - perhaps have a flag to do this
+    #    all we need to do is create a new function that receives the values in measures and processes them
+    #           (def new_function(measures))
+    #    it only needs to return a new number that represents the mean strain for the animal that is later converted to grams
+
+
+
+
     # Extract the axes limits for the final interactive plot view
     # in case the user wants to use those limits to restore the view on the next plot
     endView_xstart, endView_xend = ax.get_xlim()
@@ -667,6 +675,36 @@ def getTracePointPair(my_df, category, markers=None, axesLimits=None):
     markers = markers.set_index("Index")
 
     return mean, markers, isGood, newAxesLimits
+
+
+#########################
+#   calc_Mean_Measure: A function to estimate the value needed to represent the mean of the passed array
+#       replaces single call to statistics.mean(measures) with calc_Mean_Measure
+#       Assumes have numpy and pandas loaded as np and pd
+########
+def calc_Mean_Measure(data):
+
+    # Assuming 'data' is a Pandas Series of weights over time
+    
+    # Calculate differences between consecutive points
+    differences = np.diff(data)
+
+    # Calculate the standard deviation of the differences
+    threshold_multiplier = 2  # this could be passed as a parameter
+    threshold_STD = np.std(differences)  # this could be passed as a parameter or calculated from baseline and passed
+    threshold = threshold_multiplier * threshold_STD
+
+    # Identify indices of steady points
+    steady_indices = np.where(np.abs(differences) < threshold)[0]
+
+    # Extract the actual values corresponding to steady indices
+    steady_points = data.iloc[steady_indices]
+
+    # Take those points that qualify and get their mean and return it
+    myMean = statistics.mean(steady_points)
+
+    return myMean
+
 
 #########################
 #   annotateCurrentMarkers: A function to plot all markers from a markers dataframe on the current plt viewer
