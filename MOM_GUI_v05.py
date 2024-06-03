@@ -315,17 +315,11 @@ def mom_cut_button():
     bird_fname, bird_df = mom_open_file_dialog("not") 
     user_BURROW = return_useful_name(bird_fname) 
     my_Continue = True
-    # print(my_Continue)
-    ### test to reset values
-    # print("in mom_cut_button")
-    # print(my_entry_labels_02)
-    # print(float(my_entry_labels_02[1]))
-    ##
+
     global cal_gradient
     global cal_intercept
 
-
-    if 'cal_gradient' in globals():
+    if 'cal_gradient' in globals(): # do we already have this calculated from a previous bird?
 
         print("Cal gradent and intercept:")
         print (str(cal_gradient))
@@ -340,11 +334,9 @@ def mom_cut_button():
     else:
         my_Continue == my_Do_Calibrations(bird_df)
 
-    # my_Continue == my_Do_Calibrations(bird_df)
-    #  print(my_Continue)
 
     if(my_Continue):
-        Do_Multiple_Birds(bird_df)
+        Do_Multiple_Birds(bird_df, "Bird Data")
         
 
 
@@ -1060,11 +1052,13 @@ def my_Do_Calibrations(my_dataframe):
 #    returns: NONE
 #    RAM 6/1/24 - could change to receive a parameter "Bird Data Auto" that tells getTracePointPair it is no simple mean
 #######
-def Do_Bird(my_DataFrame):
+def Do_Bird(my_DataFrame, category):
 
 
         bird_cal_mean, bird_cal_markers, bird_cal_good, bird_cal_axesLimits = getTracePointPair(my_DataFrame, "Calibration[Bird]")
-        bird_data_mean, bird_data_markers, bird_data_good, bird_data_axesLimits = getTracePointPair(my_DataFrame, "Bird Data", bird_cal_markers, bird_cal_axesLimits)
+       # bird_data_mean, bird_data_markers, bird_data_good, bird_data_axesLimits = getTracePointPair(my_DataFrame, "Bird Data", bird_cal_markers, bird_cal_axesLimits)
+        bird_data_mean, bird_data_markers, bird_data_good, bird_data_axesLimits = getTracePointPair(my_DataFrame, category, bird_cal_markers, bird_cal_axesLimits)
+
         measure_start = bird_data_markers[bird_data_markers["Point"]=="Start"].Datetime.iloc[0]
         measure_end = bird_data_markers[bird_data_markers["Point"]=="End"].Datetime.iloc[0]
 
@@ -1117,18 +1111,22 @@ def Do_Bird(my_DataFrame):
 #############################
 # Function Do_Multiple_Birds: to id mltiple birds in one file
 #    RAM 7/26/22
-#    Parameters: NONE
+#    Parameters: dataframe
 #    Returns: NONE
+#
+#    RAM 6/2/24
+#    Add parameter for category to pass to GetPointPair
+#    Allows us to designate what function to use for the calculation of mean
 #    
 #######
-def Do_Multiple_Birds(my_DataFrame):
+def Do_Multiple_Birds(my_DataFrame, category):
     global birds
     Set_Globals()  # reset the saved birds
     # assumes have lists declared as global
     # Allow the user to continue entering birds for as many times as she wants
     while (True):
         if(confirm_continue("Enter bird data?")):
-            Do_Bird(my_DataFrame)
+            Do_Bird(my_DataFrame, category)
         else:
             break
 
