@@ -76,7 +76,9 @@ def Set_Globals():
 
     global my_Continue
     global vVersString
-    vVersString = " (v_05)"  ## upDATE AS NEEDE
+    global vAppName
+    vVersString = " (v_05)"  ## upDATE AS NEEDED
+    vAppName = "Mass-O-Matic Analyzer" + vVersString
 
     ### now make them
     birds_datetime_starts = []
@@ -170,7 +172,8 @@ myHeight = 1000
 # Create the root window
 root = tk.Tk()
 root.geometry(f"{myWidth}x{myHeight}")
-root.title("Work with MOM datafile")
+# root.title("Work with MOM datafile "+ vVersString)
+root.title(vAppName)
 
 # Calculate the output frame width
 output_width = myWidth - 2 * 10
@@ -188,7 +191,7 @@ buttonFrame.pack(pady=30)
 myButtonPadx = 5
 myButtonPady = 5
 myButtonWidth = 20
-myButtonLabels = ["Browse Files", "Process MOM", "Cut Calc Mean", "Get Times"]
+myButtonLabels = ["Browse Files", "Process Birds", "Cut Calc Mean", "Get Times"]
 
 # Create the buttons command=lambda num=i+1: mom_calc_button(num))
 buttons = []
@@ -242,7 +245,7 @@ tk.Frame(root, height=30).pack()
 
 
 ###################
-# INPUT FRAME for reading frame
+# INPUT FRAME for reading frame during the automatic search for semi-stable data point stretches
 ##
 
 # important variables
@@ -255,7 +258,7 @@ inputFrame_AUTO.pack()
 
 # Create labels and entry widgets in a grid
 my_entry_terms_AUTO = ["Min Pts:", "Diff between Pts:", "STD DEV:"]
-my_entry_labels_AUTO = [str(7), str(400), str(200)]
+my_entry_labels_AUTO = [str(7), str(400), str(200)]   # could put these in external file like calibration wts
 my_entries2_AUTO= []
 for i, label in enumerate(my_entry_labels_AUTO):
     tk.Label(inputFrame_AUTO, text=my_entry_terms_AUTO[i]).grid(row=0, column=i, padx=myButtonPadX, pady=myButtonPadY)
@@ -702,7 +705,7 @@ def getTracePointPair(my_df, category, markers=None, axesLimits=None):
     # measures_series = pd.Series(measures, name='Measures Series')
     print("before doing means")
     
-    if category == "Bird Data":
+    if category == "Bird Data Auto":   #  "Bird Data":  # make this non-funtioning, should work as old
 
         # reduce the size of array to only qualifying points - automation - remove for now?
         measures_series = pd.Series(measures, name='Measures Series')
@@ -1160,7 +1163,7 @@ def Do_Multiple_Birds(my_DataFrame):
 #    Choose start and stop when baseline begins/ends disturbance
 #       Data to gather - start time, start point, points between markers
 #           additional want: symmetrical, reliable
-#    RAM 78/25/22
+#    RAM 7/25/22
 #    parameters: NONE 
 #    returns: NONE
 #######
