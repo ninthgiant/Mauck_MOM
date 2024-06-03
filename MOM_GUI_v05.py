@@ -1,8 +1,13 @@
 ﻿##############################
 #
-#    MOM_GUI_v04.py - RAM, January 29, 2024
-#       Builds on v_01:3
-#       trying new stuff and don't want to corrupt v_03
+#    MOM_GUI_v05.py - RAM, June 2, 2024
+#       Builds on v_04
+#       Gives more than one option for how to average values in a trace
+#       Changes:
+#           05.01 - New file 
+#           05.02 Pass parameter to mom_cut_button to designate which mehtod to use in calculating mean
+#           Make third button the auto method button - this works
+#           05.03 make the auto button use the values on screen as threshold and window size - works
 #       
 #########
 ##############################
@@ -73,6 +78,10 @@ def Set_Globals():
     global cal1_value  ## feature request - display after defaults set and allow user to change them in real time
     global cal2_value
     global cal3_value
+
+    global my_std  # to keep track of the automation parameters
+    global my_rolling_window
+    global my_inclusion_threshold
 
     global my_Continue
     global vVersString
@@ -191,7 +200,7 @@ buttonFrame.pack(pady=30)
 myButtonPadx = 5
 myButtonPady = 5
 myButtonWidth = 20
-myButtonLabels = ["Browse Files", "Process Birds", "Cut Calc Mean", "Get Times"]
+myButtonLabels = ["Browse Files", "Process Birds", "Cut Calc Mean", "Process Auto"]
 
 # Create the buttons command=lambda num=i+1: mom_calc_button(num))
 buttons = []
@@ -201,7 +210,7 @@ b1 = tk.Button(buttonFrame, text = myButtonLabels[0],command = lambda: mom_open_
 b1.pack(side=tk.LEFT, padx=myButtonPadx, pady=myButtonPady)
 buttons.append(b1)
 
-b2 = tk.Button(buttonFrame, text = myButtonLabels[1], command = lambda:mom_cut_button())  
+b2 = tk.Button(buttonFrame, text = myButtonLabels[1], command = lambda:mom_cut_button("Bird Data"))  
 b2.pack(side=tk.LEFT, padx=myButtonPadx, pady=myButtonPady)
 buttons.append(b2)
 
@@ -209,9 +218,10 @@ buttons.append(b2)
 # # b3 = Button(buttonFrame, text = myButtonLabels[2], command = lambda:mom_calc_button(False))
 # # b3.pack(side=tk.LEFT, padx=myButtonPadx, pady=myButtonPady)
 # # buttons.append(b3) 
-
-# b4 = Button(buttonFrame, text = "Multi Files", command = lambda:mom_calc_multiple_files()) 
-b4 = Button(buttonFrame, text = myButtonLabels[3], command = lambda:mom_get_char_button()) 
+ 
+# b4 = Button(buttonFrame, text = myButtonLabels[3], command = lambda:mom_get_char_button()) 
+#  change v_05.02. call to new mom_cut_button that passes a different parameter to multiple files for automatiion of mean
+b4 = tk.Button(buttonFrame, text = myButtonLabels[3], command = lambda:mom_cut_button("Bird Data Auto"))  
 b4.pack(side=tk.LEFT, padx=myButtonPadx, pady=myButtonPady)
 buttons.append(b4)
 
@@ -309,7 +319,7 @@ t3.pack(side=tk.LEFT, padx=myTextPadX, pady=myTextPadY)
 ####
 
 
-def mom_cut_button():
+def mom_cut_button(my_Mean_Type):
     pass
     ## get a file to work with, then send it here...
     bird_fname, bird_df = mom_open_file_dialog("not") 
@@ -336,7 +346,7 @@ def mom_cut_button():
 
 
     if(my_Continue):
-        Do_Multiple_Birds(bird_df, "Bird Data")
+        Do_Multiple_Birds(bird_df, my_Mean_Type)
         
 
 
@@ -746,7 +756,11 @@ def getTracePointPair(my_df, category, markers=None, axesLimits=None):
 #           1) need to catch a return array that has no values
 #           2) need a user input for threshold and length values
 ########
-def generate_final_series(input_array, threshold=5, myLen=4):
+def generate_final_series(input_array, threshold, myLen):
+
+    print("################# read values from screen inside generate_final_series ##############")
+    print(f"Threshold: {threshold}")
+    print(f"Length: {myLen}")
 
     # Create the FWD and BkWD series (initially empty)
     FWD_series = np.zeros_like(input_array, dtype=int)
@@ -871,7 +885,12 @@ def calc_Mean_Measure_Consec(mydf, threshold = 400, myLen = 7):
     threshold = float(my_entries2_AUTO[1].get())
     myLen = float(my_entries2_AUTO[0].get())
 
-       # Convert the Pandas Series to a NumPy array
+    ## print these for debugging purposes
+    print("################# read values from screen ##############")
+    print(f"Threshold: {threshold}")
+    print(f"Length: {myLen}")
+
+    # Convert the Pandas Series to a NumPy array
     measures_array = mydf.values
    
     # Get a new list of values within threshold
@@ -1053,6 +1072,16 @@ def my_Do_Calibrations(my_dataframe):
 #    RAM 6/1/24 - could change to receive a parameter "Bird Data Auto" that tells getTracePointPair it is no simple mean
 #######
 def Do_Bird(my_DataFrame, category):
+
+        # update the parameters for auto calcualtion if that is what we are using
+        if category == "Bird Data Auto BAD":
+            global my_std
+            global my_rolling_window
+            global my_inclusion_threshold
+   
+            ## changd to float, does that cure iut?
+            my_rolling_window = int(my_entries[3].get())
+            my_inclusion_threshold = float(my_entries[2].get())
 
 
         bird_cal_mean, bird_cal_markers, bird_cal_good, bird_cal_axesLimits = getTracePointPair(my_DataFrame, "Calibration[Bird]")
