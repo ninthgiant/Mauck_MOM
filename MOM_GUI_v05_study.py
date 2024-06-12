@@ -1,11 +1,16 @@
 ﻿##############################
 #
-#    MOM_GUI_v04.py - RAM, January 29, 2024
-#       Builds on v_01:3
-#       trying new stuff and don't want to corrupt v_03
+#    MOM_GUI_v05.py - RAM, June 2, 2024
+#       Builds on v_04
+#       Gives more than one option for how to average values in a trace
+#       Changes:
+#           05.01 - New file 
+#           05.02 Pass parameter to mom_cut_button to designate which mehtod to use in calculating mean
+#           Make third button the auto method button - this works
+#           05.03 make the auto button use the values on screen as threshold and window size - works
+#           05.04 on June 6, 2024 - cleaned up output data to show datapoints and time of window used
 #       
-#########
-##############################
+#######################################
 
 ########
 # import libraries, etc.
@@ -74,9 +79,18 @@ def Set_Globals():
     global cal2_value
     global cal3_value
 
+    global my_SPS ## set the SPS used for time calculation
+    my_SPS = 80
+
+    global my_std  # to keep track of the automation parameters
+    global my_rolling_window
+    global my_inclusion_threshold
+
     global my_Continue
     global vVersString
-    vVersString = " (v_05)"  ## upDATE AS NEEDE
+    global vAppName
+    vVersString = " (v_05)"  ## upDATE AS NEEDED
+    vAppName = "Mass-O-Matic Analyzer" + vVersString
 
     ### now make them
     birds_datetime_starts = []
@@ -155,9 +169,7 @@ def return_useful_name(the_path):
 
 
 ###########################################
-#
 #   setup the user interface, first calling the globals
-#
 #######
 
 # declare global variables
@@ -170,7 +182,8 @@ myHeight = 1000
 # Create the root window
 root = tk.Tk()
 root.geometry(f"{myWidth}x{myHeight}")
-root.title("Work with MOM datafile")
+# root.title("Work with MOM datafile "+ vVersString)
+root.title(vAppName)
 
 # Calculate the output frame width
 output_width = myWidth - 2 * 10
@@ -188,7 +201,7 @@ buttonFrame.pack(pady=30)
 myButtonPadx = 5
 myButtonPady = 5
 myButtonWidth = 20
-myButtonLabels = ["Browse Files", "Process MOM", "Cut Calc Mean", "Get Times"]
+myButtonLabels = ["Browse Files", "Process Birds", "Cut Calc Mean", "Process Auto"]
 
 # Create the buttons command=lambda num=i+1: mom_calc_button(num))
 buttons = []
@@ -198,7 +211,7 @@ b1 = tk.Button(buttonFrame, text = myButtonLabels[0],command = lambda: mom_open_
 b1.pack(side=tk.LEFT, padx=myButtonPadx, pady=myButtonPady)
 buttons.append(b1)
 
-b2 = tk.Button(buttonFrame, text = myButtonLabels[1], command = lambda:mom_cut_button())  
+b2 = tk.Button(buttonFrame, text = myButtonLabels[1], command = lambda:mom_cut_button("Bird Data"))  
 b2.pack(side=tk.LEFT, padx=myButtonPadx, pady=myButtonPady)
 buttons.append(b2)
 
@@ -206,9 +219,10 @@ buttons.append(b2)
 # # b3 = Button(buttonFrame, text = myButtonLabels[2], command = lambda:mom_calc_button(False))
 # # b3.pack(side=tk.LEFT, padx=myButtonPadx, pady=myButtonPady)
 # # buttons.append(b3) 
-
-# b4 = Button(buttonFrame, text = "Multi Files", command = lambda:mom_calc_multiple_files()) 
-b4 = Button(buttonFrame, text = myButtonLabels[3], command = lambda:mom_get_char_button()) 
+ 
+# b4 = Button(buttonFrame, text = myButtonLabels[3], command = lambda:mom_get_char_button()) 
+#  change v_05.02. call to new mom_cut_button that passes a different parameter to multiple files for automatiion of mean
+b4 = tk.Button(buttonFrame, text = myButtonLabels[3], command = lambda:mom_cut_button("Bird Data Auto"))  
 b4.pack(side=tk.LEFT, padx=myButtonPadx, pady=myButtonPady)
 buttons.append(b4)
 
@@ -242,7 +256,7 @@ tk.Frame(root, height=30).pack()
 
 
 ###################
-# INPUT FRAME for reading frame
+# INPUT FRAME for reading frame during the automatic search for semi-stable data point stretches
 ##
 
 # important variables
@@ -255,7 +269,7 @@ inputFrame_AUTO.pack()
 
 # Create labels and entry widgets in a grid
 my_entry_terms_AUTO = ["Min Pts:", "Diff between Pts:", "STD DEV:"]
-my_entry_labels_AUTO = [str(7), str(400), str(200)]
+my_entry_labels_AUTO = [str(7), str(400), str(200)]   # could put these in external file like calibration wts
 my_entries2_AUTO= []
 for i, label in enumerate(my_entry_labels_AUTO):
     tk.Label(inputFrame_AUTO, text=my_entry_terms_AUTO[i]).grid(row=0, column=i, padx=myButtonPadX, pady=myButtonPadY)
@@ -306,23 +320,17 @@ t3.pack(side=tk.LEFT, padx=myTextPadX, pady=myTextPadY)
 ####
 
 
-def mom_cut_button():
+def mom_cut_button(my_Mean_Type):
     pass
     ## get a file to work with, then send it here...
     bird_fname, bird_df = mom_open_file_dialog("not") 
     user_BURROW = return_useful_name(bird_fname) 
     my_Continue = True
-    # print(my_Continue)
-    ### test to reset values
-    # print("in mom_cut_button")
-    # print(my_entry_labels_02)
-    # print(float(my_entry_labels_02[1]))
-    ##
+
     global cal_gradient
     global cal_intercept
 
-
-    if 'cal_gradient' in globals():
+    if 'cal_gradient' in globals(): # do we already have this calculated from a previous bird?
 
         print("Cal gradent and intercept:")
         print (str(cal_gradient))
@@ -337,28 +345,11 @@ def mom_cut_button():
     else:
         my_Continue == my_Do_Calibrations(bird_df)
 
-    # my_Continue == my_Do_Calibrations(bird_df)
-    #  print(my_Continue)
 
     if(my_Continue):
-        Do_Multiple_Birds(bird_df)
+        Do_Multiple_Birds(bird_df, my_Mean_Type)
         
 
-
-def mom_calc_button(multiple_files):
-    ### for now just get one file at a time with GUI; have another button for multiple files
-    my_rolling_window = int(my_entries[3].get())
-    my_inclusion_threshold = float(my_entries[2].get())
-
-        ## get a file to work with, then send it here...
-    bird_fname, bird_df = mom_open_file_dialog("not")  
-        ## do the calculations
-    bird_mean, bird_baseline, n_points = my_entries2[1](bird_df, bird_fname, my_rolling_window, my_inclusion_threshold)  ## last number is the points in the rolling windows
-        #update the column wiht this calc info
-    t2.insert("1.0", "\tStrain Change: " + str(round((bird_mean - bird_baseline),1)) + "\t(N=" +str(n_points) + ")\n")
-    t2.insert("1.0", "\tBird baseline: " + str(round(bird_baseline,1)) + "\n")
-    t2.insert("1.0", "\tBird (" + str(my_rolling_window) + ", "+ str(my_inclusion_threshold)+ "): " + str(round(bird_mean,1)) + "\n")
-    
     
 
 def mom_get_char_button():
@@ -371,32 +362,6 @@ def mom_get_char_button():
     #     Do_Multiple_Characteristics(bird_df)
 
 
-def mom_calc_multiple_files():
-    raw_files_path = "/Users/bobmauck/devel/LHSP_MOM_GUI/main/Data_Files/Cut_Bird_Only"
-    files_to_load = os.listdir(raw_files_path)
-    files_to_load_absolute = [ os.path.join(raw_files_path,filename) for filename in files_to_load ] 
-    print(files_to_load_absolute)
-    dataframes_to_load = [ pd.read_csv(fpath, header=None, skiprows=1) for fpath in files_to_load_absolute]
-    dataframes_to_load = [ mom_format_dataframe(df) for df in dataframes_to_load]
-    my_Windows = [3, 5, 7]
-    my_Thresholds = [0.01, 0.0125, 0.015, 0.0175, 0.02, 0.025, 0.03]
-        ## could cycle through files and rolling windows and thresholds
-        #       datafiles are located in: "/Users/bobmauck/devel/LHSP_MOM_GUI/main/Data_Files/Cut_Bird_Only"
-    output_df = pd.DataFrame([], columns={ "bird_mean", "bird_baseline", "n_points", "rolling_window", "my_threshold","File_name", "type_of_calc"})
-    type_of_calc = "pct_change"
-    for bird_df, bird_fname in zip(dataframes_to_load, files_to_load):
-        for my_rolling_window in my_Windows:
-            for my_inclusion_threshold in my_Thresholds:
-                print(bird_fname, my_rolling_window, my_inclusion_threshold)
-                bird_mean, bird_baseline, n_points = do_PctChg_Bird_Calcs(bird_df, bird_fname, my_rolling_window, my_inclusion_threshold, False, False)
-                output_df.loc[len(output_df.index)] = [bird_mean, bird_baseline, n_points, my_rolling_window, my_inclusion_threshold, bird_fname, type_of_calc]
-    
-    my_unique_name = " 002"
-    output_path = "/Users/bobmauck/devel/LHSP_MOM_GUI/main/Data_Files/Cut_Bird_Only" + my_unique_name
-    output_df.to_csv(output_path, sep = "\t", index=False)
-    # print(output_df)
-
-    return output_df
 
        
 def mom_format_dataframe(mydf):
@@ -512,71 +477,20 @@ def mom_open_file_dialog(to_show):
 
     return f_name, df
 
-def add_titlebox(ax, text):
-    ax.text(.02, .9, text,   ## proportion left to right, proportion bottom to top, the text
-        horizontalalignment='left',
-        transform=ax.transAxes,
-        fontsize=10)
-    return ax
+
 
 def mom_get_file_info(my_df):
+    global my_SPS
+    print(str(my_SPS) + "SPS" + "\n")
     #### show user info on the file chosen
-    str1="\tRows:" + str(my_df.shape[0])+ "\t\tColumns:"+str(my_df.shape[1])+"\n"  #Minutes: "# +str(df.shape[0]/10.5/60)+"\n"
-    str2="\tMinutes: " + str(round((my_df.shape[0])/10.5/60,2))+"\t"
-    str3="(" + str(round((my_df.shape[0])/10.5/60/60,2))+" hours)\n"
+    str1="\tPoints:" + str(my_df.shape[0])+ "\t\tColumns:"+str(my_df.shape[1])+"\n"  #Minutes: "# +str(df.shape[0]/10.5/60)+"\n"
+    str2="\tMinutes: " + str(round((my_df.shape[0])/my_SPS/60,2))+"\t"
+    str3="(" + str(round((my_df.shape[0])/my_SPS/60/60,2))+" hours)\n"
     str4 = "\tMean Strain: " + str(round(my_df["Measure"].mean())) + "\n"
 
     return(str1 + str2 + str3 + str4)
 
-# #################
-#   do_PctChg_Bird_Calcs(my_df,f_name, my_window, my_threshold, my_update_screen)
-#           Do calcultions of the bird detected - assumes df contains only that section of the file with bird, no other data 
-#                                        must have cut it first to right length
-#           my_update_screen shoudl be false if we are doing multiple birds in one batch
-# #####
-def do_PctChg_Bird_Calcs(my_df,f_name, my_window, my_threshold, my_update_screen = True, do_Plot = True):
 
-        ## threshold to use for inclusion or exclusion from consideration between points
-    mom_Threshold = my_threshold
- 
-    if(my_update_screen):
-        # update the onscreen info into l1 and t3...make it fit into 80 chars
-        dispName = f_name[(len(f_name)-60):len(f_name)]
-        ## l1.config(text=dispName) # display the path ## FIX
-        display_string = mom_get_file_info(my_df)
-        display_string = return_useful_name (f_name) + "\n" + display_string  
-        t2.insert("1.0", display_string)
-
-
-    lo_point, hi_point, my_df = mom_find_target_values(my_df, my_window)
-
-    ####################
-    # START of the treatment specific to the type of analysis this is (pct_chg~1st derivative)
-    ########
-    target_df = my_df[hi_point:lo_point]
-
-    # Reduce to dataframe with only below thresh for pct chg abs
-    isWithinThreshold = target_df["pct_chg_abs"] < mom_Threshold
-    target_df = target_df[isWithinThreshold]
-    # how many points are we using?
-    n_points = target_df.shape[0]
-    # going back to the original df to get the values
-    bird_df = my_df.iloc[target_df.index.values]
-    bird_mean = bird_df["Measure"].mean()
-    ####################
-    # END of the treatment specific to the type of analysis this is (pct_chg~1st derivative)
-    ########
- 
-    # get baseline from the same window, surounding the bird span
-    bird_baseline_mean, bird_plot_df = mom_get_baseline(my_df, lo_point, hi_point)
-    
-    # now show focused plot and export that plot with info for later viewing
-    # get the burrow number
-
-    if(do_Plot):
-        mom_do_birdplot(bird_df, bird_plot_df, display_string, my_window, my_threshold, "pctChg")
-    
-    return bird_mean, bird_baseline_mean, n_points
 
 def mom_do_birdplot (bird_df, bird_plot_df, my_filename, my_window, my_threshold, my_type):
     ##### need to improve - send to specific folder for these plots
@@ -594,59 +508,14 @@ def mom_do_birdplot (bird_df, bird_plot_df, my_filename, my_window, my_threshold
  
 
 
-def mom_get_baseline(my_df, lo_point, hi_point):
-        # can be used any file as long as you adjust for how much room we can us
-        ### now zoom into the focal area to show the plot and calculate the baseline mean
-        # parameters for this. Should they be passed?
-    total_len = my_df.shape[0]
-
-    if(total_len > 300):
-        my_padding = 100
-    else:
-        my_padding = 50
-
-    baseline_max = 0.00002
-        # get subset of data from my_df
-    bird_plot_df = my_df[(hi_point - my_padding):(lo_point + my_padding)]
-        # get a df with only baseline data
-    bird_baseline_df = bird_plot_df.loc[bird_plot_df['pct_chg_abs'] < baseline_max]
-    bird_baseline_mean = bird_baseline_df["Measure"].mean()
-
-    return bird_baseline_mean, bird_plot_df
-
-
-def mom_find_target_values(my_df, my_window):
-        # gets a df to work with that has all the original columns, condense to one 'Measure/
-        # gets my_window to determine the rolling window on which pct change is based
-        # condense into one column to do the calculations, setup the data we need to make decisions 
-        # uses pct change from a rolling window to decide what to include 
-    
-    my_df = my_df[ 'Measure'].to_frame()
-    my_df['roll_std'] = my_df['Measure'].rolling(my_window, center = True).std() 
-    my_df['roll_mean'] = my_df['Measure'].rolling(my_window, center = True).mean()
-    my_df['pct_chg'] = my_df['roll_mean'].pct_change()
-    my_df['pct_chg_abs'] = my_df['pct_chg'].abs()
-    
-    ### make a numpy array so that we can do quick math
-    my_numpy_array = my_df["pct_chg"].to_numpy()
-
-    ## find the interval of interest between the high and low points - assumes MOM "behavior"
-    ##     hi poinr is positive change with stepping on MOM, low is negative change in exiting
-    ##     do I need to adjust this in case opposite direction? which occurs first?
-    hi_point = np.nanargmax(my_numpy_array)
-    lo_point = np.nanargmin(my_numpy_array)
-    ## get the actual values at those points - not really needed yet, so don't express
-    # lo_value = my_df["pct_chg"].iloc[lo_point]
-    # hi_value = my_df["pct_chg"].iloc[hi_point]
-
-    return lo_point, hi_point, my_df
 
 
 def mom_get_file_info(my_df):
+    global my_SPS
     #### show user info on the file chosen
     str1="\tRows:" + str(my_df.shape[0])+ "\t\tColumns:"+str(my_df.shape[1])+"\n"  #Minutes: "# +str(df.shape[0]/10.5/60)+"\n"
-    str2="\tMinutes: " + str(round((my_df.shape[0])/10.5/60,2))+"\t"
-    str3="(" + str(round((my_df.shape[0])/10.5/60/60,2))+" hours)\n"
+    str2="\tMinutes: " + str(round((my_df.shape[0])/my_SPS/60,2))+"\t"
+    str3="(" + str(round((my_df.shape[0])/my_SPS/60/60,2))+" hours)\n"
     str4 = "\tMean Strain: " + str(round(my_df["Measure"].mean())) + "\n"
 
     return(str1 + str2 + str3 + str4)
@@ -702,7 +571,7 @@ def getTracePointPair(my_df, category, markers=None, axesLimits=None):
     # measures_series = pd.Series(measures, name='Measures Series')
     print("before doing means")
     
-    if category == "Bird Data":
+    if category == "Bird Data Auto":   #  "Bird Data":  # make this non-funtioning, should work as old
 
         # reduce the size of array to only qualifying points - automation - remove for now?
         measures_series = pd.Series(measures, name='Measures Series')
@@ -748,10 +617,14 @@ def getTracePointPair(my_df, category, markers=None, axesLimits=None):
 #       2) are part of a sequence of at least myLen length
 #       -- Work is done on a SERIES not a dataframe, so have convert data to be received
 #       TO DO:
-#           1) need to catch a return array that has no values
-#           2) need a user input for threshold and length values
+#           1) need to catch a return array that has no values - done 2023
+#           2) need a user input for threshold and length values - done 6/2/24
 ########
-def generate_final_series(input_array, threshold=5, myLen=4):
+def generate_final_series(input_array, threshold, myLen):
+
+    print("################# DEBUG: read values from screen inside generate_final_series ##############")
+    print(f"Threshold: {threshold}")
+    print(f"Length: {myLen}")
 
     # Create the FWD and BkWD series (initially empty)
     FWD_series = np.zeros_like(input_array, dtype=int)
@@ -876,7 +749,12 @@ def calc_Mean_Measure_Consec(mydf, threshold = 400, myLen = 7):
     threshold = float(my_entries2_AUTO[1].get())
     myLen = float(my_entries2_AUTO[0].get())
 
-       # Convert the Pandas Series to a NumPy array
+    ## print these for debugging purposes
+    print("################# read values from screen ##############")
+    print(f"Threshold: {threshold}")
+    print(f"Length: {myLen}")
+
+    # Convert the Pandas Series to a NumPy array
     measures_array = mydf.values
    
     # Get a new list of values within threshold
@@ -1057,11 +935,23 @@ def my_Do_Calibrations(my_dataframe):
 #    returns: NONE
 #    RAM 6/1/24 - could change to receive a parameter "Bird Data Auto" that tells getTracePointPair it is no simple mean
 #######
-def Do_Bird(my_DataFrame):
+def Do_Bird(my_DataFrame, category):
+
+        # update the parameters for auto calcualtion if that is what we are using
+        if category == "Bird Data Auto BAD": 
+            global my_std
+            global my_rolling_window
+            global my_inclusion_threshold
+   
+            ## changd to float, does that cure iut?
+            my_rolling_window = int(my_entries[3].get())
+            my_inclusion_threshold = float(my_entries[2].get())
 
 
         bird_cal_mean, bird_cal_markers, bird_cal_good, bird_cal_axesLimits = getTracePointPair(my_DataFrame, "Calibration[Bird]")
-        bird_data_mean, bird_data_markers, bird_data_good, bird_data_axesLimits = getTracePointPair(my_DataFrame, "Bird Data", bird_cal_markers, bird_cal_axesLimits)
+       # bird_data_mean, bird_data_markers, bird_data_good, bird_data_axesLimits = getTracePointPair(my_DataFrame, "Bird Data", bird_cal_markers, bird_cal_axesLimits)
+        bird_data_mean, bird_data_markers, bird_data_good, bird_data_axesLimits = getTracePointPair(my_DataFrame, category, bird_cal_markers, bird_cal_axesLimits)
+
         measure_start = bird_data_markers[bird_data_markers["Point"]=="Start"].Datetime.iloc[0]
         measure_end = bird_data_markers[bird_data_markers["Point"]=="End"].Datetime.iloc[0]
 
@@ -1069,42 +959,51 @@ def Do_Bird(my_DataFrame):
         bird_baseline_diff = abs(bird_data_mean - bird_cal_mean)
         bird_regression_mass = round(bird_baseline_diff * cal_gradient + cal_intercept, 2)
 
-        # Allow the user to input extra details for a "Notes" column
+        # print("data_markers array:")
+
+        print(bird_data_markers)
+        print("")
+        print("Columns in bird_data_markers: ", bird_data_markers.columns)
+        print("")
+
+        measure_start = bird_data_markers.index[0]
+        measure_end = bird_data_markers.index[1]
+
+        print("measure_start: " + str(measure_start))
+        print("measure_end: " + str(measure_end))
+
+        my_Points = measure_end - measure_start # bird_data_markers.Index[1] - bird_data_markers.Index[0]
+        global my_SPS
+        my_Span = my_Points/my_SPS
+
+        if(confirm_continue("Good measurement?")):
+            my_Eval = "Good"
+        else:
+            my_Eval = "Bad"
+
+        # print(bird_regression_mass)
+
+        # my_time = my_time + ", " + my_Eval
+
+                # Allow the user to input extra details for a "Notes" column
         # bird_details = input("Enter any details about the bird:     ")
         bird_details = "None"
 
         # Add the info about this bird to the accumulating lists
-        birds_datetime_starts.append(measure_start)
-        birds_datetime_ends.append(measure_end)
-        birds_data_means.append(bird_data_mean)
+        birds_datetime_starts.append(my_Points) # maybe replace this wih the Span in seconds
+        birds_datetime_ends.append(my_Span) # maybe replace this wih the Span in points
+        birds_data_means.append(bird_data_mean) 
         birds_cal_means.append(bird_cal_mean)
         birds_baseline_diff.append(bird_baseline_diff)
         birds_regression_mass.append(bird_regression_mass)
         birds_details.append(bird_details)
 
-        print("Bird Mass: ")
-        ## my_duration = (bird_data_markers["Point"]=="End"])-(bird_data_markers["Point"]=="Start"])
-        #### try this
-       #  print("Try start: " + measure_start.time())
-        ###
-        
-        # my_time = measure_start[-8:] + "," + measure_end[-8:]
-        my_time = str(measure_start.time()) + "," + str(measure_end.time())
-        # print("times: " + my_time)
-
-        if(confirm_continue("Good measurement?")):
-            my_Eval = "G"
-        else:
-            my_Eval = "B"
-
-        print(bird_regression_mass)
-
-        my_time = my_time + ", " + my_Eval
-
         print(bird_regression_mass)  ## reverse this
-        t3.insert("1.0", "\t" +str(bird_regression_mass) + "," + str(my_time) + "\n") #4 add to Text widget
-        t3.insert("1.0", "\tTime ON:\t" + str(my_time) + "\n") #3 add to Text widget
-        t3.insert("1.0", "\tBird Mass: \t" + str(bird_regression_mass) + "\n") #2 add to Text widget
+        # t3.insert("1.0", "\t" +str(bird_regression_mass) + "," + str(my_time) + "\n") #4 add to Text widget
+        # t3.insert("1.0", "\tTime ON:\t" + str(my_time) + "\n") #3 add to Text widget
+        # t3.insert("1.0", "\tPoints:\t" + str(myPoints) + "\n") #3 add to Text widget
+        t3.insert("1.0", "\tPoints (s): \t" + str(my_Points) + " (" + str(round(my_Span,1)) + "s)" + "\n") #2 add to Text widget
+        t3.insert("1.0", "\tBird Mass:  \t" + str(bird_regression_mass) + " - " + my_Eval + "\n") #2 add to Text widget
         t3.insert("1.0", "File: " + user_BURROW + " - Weight Calculation:" + "\n") # 1 add to Text widget
 
         t2.insert(1.0, "File: " + user_BURROW + "\n") # add to Text widget
@@ -1114,18 +1013,22 @@ def Do_Bird(my_DataFrame):
 #############################
 # Function Do_Multiple_Birds: to id mltiple birds in one file
 #    RAM 7/26/22
-#    Parameters: NONE
+#    Parameters: dataframe
 #    Returns: NONE
+#
+#    RAM 6/2/24
+#    Add parameter for category to pass to GetPointPair
+#    Allows us to designate what function to use for the calculation of mean
 #    
 #######
-def Do_Multiple_Birds(my_DataFrame):
+def Do_Multiple_Birds(my_DataFrame, category):
     global birds
     Set_Globals()  # reset the saved birds
     # assumes have lists declared as global
     # Allow the user to continue entering birds for as many times as she wants
     while (True):
         if(confirm_continue("Enter bird data?")):
-            Do_Bird(my_DataFrame)
+            Do_Bird(my_DataFrame, category)
         else:
             break
 
@@ -1133,8 +1036,8 @@ def Do_Multiple_Birds(my_DataFrame):
     #   Make the accumulated bird info into a clean dataframe for exporting
     birds = pd.DataFrame({"Burrow":user_BURROW,
                           "Date":data_DATE,
-                          "Datetime_Measure_Start":birds_datetime_starts,
-                          "Datetime_Measure_End":birds_datetime_ends,
+                          "Data_pts":birds_datetime_starts,
+                          "Duration_secs":birds_datetime_ends,
                           "Mean_Data_Strain":birds_data_means,
                           "Mean_Calibration_Strain":birds_cal_means,
                           "Baseline_Difference":birds_baseline_diff,
@@ -1160,28 +1063,38 @@ def Do_Multiple_Birds(my_DataFrame):
 #    Choose start and stop when baseline begins/ends disturbance
 #       Data to gather - start time, start point, points between markers
 #           additional want: symmetrical, reliable
-#    RAM 78/25/22
+#    RAM 7/25/22
 #    parameters: NONE 
 #    returns: NONE
 #######
 def Do_Bird_Characteristics(my_DataFrame):
 
     bird_data_mean, bird_data_markers, bird_data_good, bird_data_axesLimits = getTracePointPair(my_DataFrame, "Duration")
-    measure_start = bird_data_markers[bird_data_markers["Point"]=="Start"].Datetime.iloc[0]
-    measure_end = bird_data_markers[bird_data_markers["Point"]=="End"].Datetime.iloc[0]
+    # measure_start = bird_data_markers[bird_data_markers["Point"]=="Start"].Datetime.iloc[0]
+    # measure_end = bird_data_markers[bird_data_markers["Point"]=="End"].Datetime.iloc[0]
+
+    measure_start = bird_data_markers.index[0]
+    measure_end = bird_data_markers.index[1]
+
+    print("measure_start: " + str(measure_start))
+    print("measure_end: " + str(measure_end))
+
+    my_Points = measure_end - measure_start # bird_data_markers.Index[1] - bird_data_markers.Index[0]
+    global my_SPS
+    my_Span = my_Points/my_SPS
 
     bird_details = "Duration"
 
     if(confirm_continue("Good measurement?")):
-        my_Eval = "G"
+        my_Eval = "Good"
     else:
-        my_Eval = "B"
+        my_Eval = "Bad"
     ### try this
-    my_time = str(measure_start.time()) + "," + str(measure_end.time())
+    # my_time = str(measure_start.time()) + "," + str(measure_end.time())
     ### 
     # my_time = measure_start[-8:] + "," + measure_end[-8:] + "," + my_Eval
 
-    t3.insert("1.0", "\t" + str(my_time) + "\n") # add to Text widget
+    t3.insert("1.0", "\t" + str(my_Points) + "\t" + str(my_Span) + "\n") # add to Text widget
     t3.insert("1.0", "File: " + user_BURROW + " - Duration:" + "\n") # add to Text widget
     
 

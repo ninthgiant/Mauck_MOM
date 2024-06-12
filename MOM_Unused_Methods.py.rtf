@@ -1,0 +1,184 @@
+{\rtf1\ansi\ansicpg1252\cocoartf1404\cocoasubrtf470
+{\fonttbl\f0\fnil\fcharset0 Menlo-Regular;\f1\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;\red89\green138\blue67;\red23\green23\blue23;\red202\green202\blue202;
+\red70\green137\blue204;\red212\green214\blue154;\red140\green211\blue254;\red67\green192\blue160;\red167\green197\blue152;
+\red194\green126\blue101;\red205\green173\blue106;\red183\green111\blue179;}
+\margl1440\margr1440\vieww13800\viewh15080\viewkind0
+\deftab720
+\pard\pardeftab720\sl360\partightenfactor0
+
+\f0\fs24 \cf2 \cb3 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 ##############################\cf4 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 #\cf4 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 #    MOM_GUI_File_not_used.py - RAM, June 7, 2024\cf4 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 #\
+#		methods not used in latest version (v_05) of MOM_GUI\cf4 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 #       \cf4 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 #######################################\cf4 \cb1 \strokec4 \
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f1 \cf0 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 \
+\
+\pard\pardeftab720\sl360\partightenfactor0
+
+\f0 \cf4 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec4 \
+\pard\pardeftab720\sl360\partightenfactor0
+\cf5 \cb3 \strokec5 def\cf4 \strokec4  \cf6 \strokec6 mom_calc_button\cf4 \strokec4 (\cf7 \strokec7 multiple_files\cf4 \strokec4 ):\cb1 \
+\pard\pardeftab720\sl360\partightenfactor0
+\cf4 \cb3     \cf2 \strokec2 ### for now just get one file at a time with GUI; have another button for multiple files\cf4 \cb1 \strokec4 \
+\cb3     my_rolling_window = \cf8 \strokec8 int\cf4 \strokec4 (my_entries[\cf9 \strokec9 3\cf4 \strokec4 ].get())\cb1 \
+\cb3     my_inclusion_threshold = \cf8 \strokec8 float\cf4 \strokec4 (my_entries[\cf9 \strokec9 2\cf4 \strokec4 ].get())\cb1 \
+\
+\cb3         \cf2 \strokec2 ## get a file to work with, then send it here...\cf4 \cb1 \strokec4 \
+\cb3     bird_fname, bird_df = mom_open_file_dialog(\cf10 \strokec10 "not"\cf4 \strokec4 )  \cb1 \
+\cb3         \cf2 \strokec2 ## do the calculations\cf4 \cb1 \strokec4 \
+\cb3     bird_mean, bird_baseline, n_points = my_entries2[\cf9 \strokec9 1\cf4 \strokec4 ](bird_df, bird_fname, my_rolling_window, my_inclusion_threshold)  \cf2 \strokec2 ## last number is the points in the rolling windows\cf4 \cb1 \strokec4 \
+\cb3         \cf2 \strokec2 #update the column wiht this calc info\cf4 \cb1 \strokec4 \
+\cb3     t2.insert(\cf10 \strokec10 "1.0"\cf4 \strokec4 , \cf10 \strokec10 "\cf11 \strokec11 \\t\cf10 \strokec10 Strain Change: "\cf4 \strokec4  + \cf8 \strokec8 str\cf4 \strokec4 (\cf6 \strokec6 round\cf4 \strokec4 ((bird_mean - bird_baseline),\cf9 \strokec9 1\cf4 \strokec4 )) + \cf10 \strokec10 "\cf11 \strokec11 \\t\cf10 \strokec10 (N="\cf4 \strokec4  +\cf8 \strokec8 str\cf4 \strokec4 (n_points) + \cf10 \strokec10 ")\cf11 \strokec11 \\n\cf10 \strokec10 "\cf4 \strokec4 )\cb1 \
+\cb3     t2.insert(\cf10 \strokec10 "1.0"\cf4 \strokec4 , \cf10 \strokec10 "\cf11 \strokec11 \\t\cf10 \strokec10 Bird baseline: "\cf4 \strokec4  + \cf8 \strokec8 str\cf4 \strokec4 (\cf6 \strokec6 round\cf4 \strokec4 (bird_baseline,\cf9 \strokec9 1\cf4 \strokec4 )) + \cf10 \strokec10 "\cf11 \strokec11 \\n\cf10 \strokec10 "\cf4 \strokec4 )\cb1 \
+\cb3     t2.insert(\cf10 \strokec10 "1.0"\cf4 \strokec4 , \cf10 \strokec10 "\cf11 \strokec11 \\t\cf10 \strokec10 Bird ("\cf4 \strokec4  + \cf8 \strokec8 str\cf4 \strokec4 (my_rolling_window) + \cf10 \strokec10 ", "\cf4 \strokec4 + \cf8 \strokec8 str\cf4 \strokec4 (my_inclusion_threshold)+ \cf10 \strokec10 "): "\cf4 \strokec4  + \cf8 \strokec8 str\cf4 \strokec4 (\cf6 \strokec6 round\cf4 \strokec4 (bird_mean,\cf9 \strokec9 1\cf4 \strokec4 )) + \cf10 \strokec10 "\cf11 \strokec11 \\n\cf10 \strokec10 "\cf4 \strokec4 )\cb1 \
+\cb3     \cb1 \
+\
+\pard\pardeftab720\sl360\partightenfactor0
+\cf5 \cb3 \strokec5 def\cf4 \strokec4  \cf6 \strokec6 mom_calc_multiple_files\cf4 \strokec4 ():\cb1 \
+\cb3     raw_files_path = \cf10 \strokec10 "/Users/bobmauck/devel/LHSP_MOM_GUI/main/Data_Files/Cut_Bird_Only"\cf4 \cb1 \strokec4 \
+\cb3     files_to_load = os.listdir(raw_files_path)\cb1 \
+\cb3     files_to_load_absolute = [ os.path.join(raw_files_path,filename) \cf12 \strokec12 for\cf4 \strokec4  filename \cf12 \strokec12 in\cf4 \strokec4  files_to_load ] \cb1 \
+\cb3     \cf6 \strokec6 print\cf4 \strokec4 (files_to_load_absolute)\cb1 \
+\cb3     dataframes_to_load = [ pd.read_csv(fpath, \cf7 \strokec7 header\cf4 \strokec4 =\cf5 \strokec5 None\cf4 \strokec4 , \cf7 \strokec7 skiprows\cf4 \strokec4 =\cf9 \strokec9 1\cf4 \strokec4 ) \cf12 \strokec12 for\cf4 \strokec4  fpath \cf12 \strokec12 in\cf4 \strokec4  files_to_load_absolute]\cb1 \
+\cb3     dataframes_to_load = [ mom_format_dataframe(df) \cf12 \strokec12 for\cf4 \strokec4  df \cf12 \strokec12 in\cf4 \strokec4  dataframes_to_load]\cb1 \
+\cb3     my_Windows = [\cf9 \strokec9 3\cf4 \strokec4 , \cf9 \strokec9 5\cf4 \strokec4 , \cf9 \strokec9 7\cf4 \strokec4 ]\cb1 \
+\cb3     my_Thresholds = [\cf9 \strokec9 0.01\cf4 \strokec4 , \cf9 \strokec9 0.0125\cf4 \strokec4 , \cf9 \strokec9 0.015\cf4 \strokec4 , \cf9 \strokec9 0.0175\cf4 \strokec4 , \cf9 \strokec9 0.02\cf4 \strokec4 , \cf9 \strokec9 0.025\cf4 \strokec4 , \cf9 \strokec9 0.03\cf4 \strokec4 ]\cb1 \
+\cb3         \cf2 \strokec2 ## could cycle through files and rolling windows and thresholds\cf4 \cb1 \strokec4 \
+\cb3         \cf2 \strokec2 #       datafiles are located in: "/Users/bobmauck/devel/LHSP_MOM_GUI/main/Data_Files/Cut_Bird_Only"\cf4 \cb1 \strokec4 \
+\cb3     output_df = pd.DataFrame([], \cf7 \strokec7 columns\cf4 \strokec4 =\{ \cf10 \strokec10 "bird_mean"\cf4 \strokec4 , \cf10 \strokec10 "bird_baseline"\cf4 \strokec4 , \cf10 \strokec10 "n_points"\cf4 \strokec4 , \cf10 \strokec10 "rolling_window"\cf4 \strokec4 , \cf10 \strokec10 "my_threshold"\cf4 \strokec4 ,\cf10 \strokec10 "File_name"\cf4 \strokec4 , \cf10 \strokec10 "type_of_calc"\cf4 \strokec4 \})\cb1 \
+\cb3     type_of_calc = \cf10 \strokec10 "pct_change"\cf4 \cb1 \strokec4 \
+\cb3     \cf12 \strokec12 for\cf4 \strokec4  bird_df, bird_fname \cf12 \strokec12 in\cf4 \strokec4  \cf6 \strokec6 zip\cf4 \strokec4 (dataframes_to_load, files_to_load):\cb1 \
+\cb3         \cf12 \strokec12 for\cf4 \strokec4  my_rolling_window \cf12 \strokec12 in\cf4 \strokec4  my_Windows:\cb1 \
+\cb3             \cf12 \strokec12 for\cf4 \strokec4  my_inclusion_threshold \cf12 \strokec12 in\cf4 \strokec4  my_Thresholds:\cb1 \
+\cb3                 \cf6 \strokec6 print\cf4 \strokec4 (bird_fname, my_rolling_window, my_inclusion_threshold)\cb1 \
+\cb3                 bird_mean, bird_baseline, n_points = do_PctChg_Bird_Calcs(bird_df, bird_fname, my_rolling_window, my_inclusion_threshold, \cf5 \strokec5 False\cf4 \strokec4 , \cf5 \strokec5 False\cf4 \strokec4 )\cb1 \
+\cb3                 output_df.loc[\cf6 \strokec6 len\cf4 \strokec4 (output_df.index)] = [bird_mean, bird_baseline, n_points, my_rolling_window, my_inclusion_threshold, bird_fname, type_of_calc]\cb1 \
+\cb3     \cb1 \
+\cb3     my_unique_name = \cf10 \strokec10 " 002"\cf4 \cb1 \strokec4 \
+\cb3     output_path = \cf10 \strokec10 "/Users/bobmauck/devel/LHSP_MOM_GUI/main/Data_Files/Cut_Bird_Only"\cf4 \strokec4  + my_unique_name\cb1 \
+\cb3     output_df.to_csv(output_path, \cf7 \strokec7 sep\cf4 \strokec4  = \cf10 \strokec10 "\cf11 \strokec11 \\t\cf10 \strokec10 "\cf4 \strokec4 , \cf7 \strokec7 index\cf4 \strokec4 =\cf5 \strokec5 False\cf4 \strokec4 )\cb1 \
+\cb3     \cf2 \strokec2 # print(output_df)\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf12 \strokec12 return\cf4 \strokec4  output_df\cb1 \
+\
+\pard\pardeftab720\sl360\partightenfactor0
+\cf2 \cb3 \strokec2 # #################\cf4 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 #   do_PctChg_Bird_Calcs(my_df,f_name, my_window, my_threshold, my_update_screen)\cf4 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 #           Do calcultions of the bird detected - assumes df contains only that section of the file with bird, no other data \cf4 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 #                                        must have cut it first to right length\cf4 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 #           my_update_screen shoudl be false if we are doing multiple birds in one batch\cf4 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 # #####\cf4 \cb1 \strokec4 \
+\pard\pardeftab720\sl360\partightenfactor0
+\cf5 \cb3 \strokec5 def\cf4 \strokec4  \cf6 \strokec6 do_PctChg_Bird_Calcs\cf4 \strokec4 (\cf7 \strokec7 my_df\cf4 \strokec4 ,\cf7 \strokec7 f_name\cf4 \strokec4 , \cf7 \strokec7 my_window\cf4 \strokec4 , \cf7 \strokec7 my_threshold\cf4 \strokec4 , \cf7 \strokec7 my_update_screen\cf4 \strokec4  = \cf5 \strokec5 True\cf4 \strokec4 , \cf7 \strokec7 do_Plot\cf4 \strokec4  = \cf5 \strokec5 True\cf4 \strokec4 ):\cb1 \
+\
+\cb3         \cf2 \strokec2 ## threshold to use for inclusion or exclusion from consideration between points\cf4 \cb1 \strokec4 \
+\cb3     mom_Threshold = my_threshold\cb1 \
+\cb3  \cb1 \
+\cb3     \cf12 \strokec12 if\cf4 \strokec4 (my_update_screen):\cb1 \
+\cb3         \cf2 \strokec2 # update the onscreen info into l1 and t3...make it fit into 80 chars\cf4 \cb1 \strokec4 \
+\cb3         dispName = f_name[(\cf6 \strokec6 len\cf4 \strokec4 (f_name)-\cf9 \strokec9 60\cf4 \strokec4 ):\cf6 \strokec6 len\cf4 \strokec4 (f_name)]\cb1 \
+\cb3         \cf2 \strokec2 ## l1.config(text=dispName) # display the path ## FIX\cf4 \cb1 \strokec4 \
+\cb3         display_string = mom_get_file_info(my_df)\cb1 \
+\cb3         display_string = return_useful_name (f_name) + \cf10 \strokec10 "\cf11 \strokec11 \\n\cf10 \strokec10 "\cf4 \strokec4  + display_string  \cb1 \
+\cb3         t2.insert(\cf10 \strokec10 "1.0"\cf4 \strokec4 , display_string)\cb1 \
+\
+\
+\cb3     lo_point, hi_point, my_df = mom_find_target_values(my_df, my_window)\cb1 \
+\
+\cb3     \cf2 \strokec2 ####################\cf4 \cb1 \strokec4 \
+\cb3     \cf2 \strokec2 # START of the treatment specific to the type of analysis this is (pct_chg~1st derivative)\cf4 \cb1 \strokec4 \
+\cb3     \cf2 \strokec2 ########\cf4 \cb1 \strokec4 \
+\cb3     target_df = my_df[hi_point:lo_point]\cb1 \
+\
+\cb3     \cf2 \strokec2 # Reduce to dataframe with only below thresh for pct chg abs\cf4 \cb1 \strokec4 \
+\cb3     isWithinThreshold = target_df[\cf10 \strokec10 "pct_chg_abs"\cf4 \strokec4 ] < mom_Threshold\cb1 \
+\cb3     target_df = target_df[isWithinThreshold]\cb1 \
+\cb3     \cf2 \strokec2 # how many points are we using?\cf4 \cb1 \strokec4 \
+\cb3     n_points = target_df.shape[\cf9 \strokec9 0\cf4 \strokec4 ]\cb1 \
+\cb3     \cf2 \strokec2 # going back to the original df to get the values\cf4 \cb1 \strokec4 \
+\cb3     bird_df = my_df.iloc[target_df.index.values]\cb1 \
+\cb3     bird_mean = bird_df[\cf10 \strokec10 "Measure"\cf4 \strokec4 ].mean()\cb1 \
+\cb3     \cf2 \strokec2 ####################\cf4 \cb1 \strokec4 \
+\cb3     \cf2 \strokec2 # END of the treatment specific to the type of analysis this is (pct_chg~1st derivative)\cf4 \cb1 \strokec4 \
+\cb3     \cf2 \strokec2 ########\cf4 \cb1 \strokec4 \
+\cb3  \cb1 \
+\cb3     \cf2 \strokec2 # get baseline from the same window, surounding the bird span\cf4 \cb1 \strokec4 \
+\cb3     bird_baseline_mean, bird_plot_df = mom_get_baseline(my_df, lo_point, hi_point)\cb1 \
+\cb3     \cb1 \
+\cb3     \cf2 \strokec2 # now show focused plot and export that plot with info for later viewing\cf4 \cb1 \strokec4 \
+\cb3     \cf2 \strokec2 # get the burrow number\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf12 \strokec12 if\cf4 \strokec4 (do_Plot):\cb1 \
+\cb3         mom_do_birdplot(bird_df, bird_plot_df, display_string, my_window, my_threshold, \cf10 \strokec10 "pctChg"\cf4 \strokec4 )\cb1 \
+\cb3     \cb1 \
+\cb3     \cf12 \strokec12 return\cf4 \strokec4  bird_mean, bird_baseline_mean, n_points\cb1 \
+\
+\pard\pardeftab720\sl360\partightenfactor0
+\cf4 \
+\pard\pardeftab720\sl360\partightenfactor0
+\cf4 \
+\pard\pardeftab720\sl360\partightenfactor0
+\cf5 \cb3 \strokec5 def\cf4 \strokec4  \cf6 \strokec6 mom_get_baseline\cf4 \strokec4 (\cf7 \strokec7 my_df\cf4 \strokec4 , \cf7 \strokec7 lo_point\cf4 \strokec4 , \cf7 \strokec7 hi_point\cf4 \strokec4 ):\cb1 \
+\cb3         \cf2 \strokec2 # can be used any file as long as you adjust for how much room we can us\cf4 \cb1 \strokec4 \
+\cb3         \cf2 \strokec2 ### now zoom into the focal area to show the plot and calculate the baseline mean\cf4 \cb1 \strokec4 \
+\cb3         \cf2 \strokec2 # parameters for this. Should they be passed?\cf4 \cb1 \strokec4 \
+\cb3     total_len = my_df.shape[\cf9 \strokec9 0\cf4 \strokec4 ]\cb1 \
+\
+\cb3     \cf12 \strokec12 if\cf4 \strokec4 (total_len > \cf9 \strokec9 300\cf4 \strokec4 ):\cb1 \
+\cb3         my_padding = \cf9 \strokec9 100\cf4 \cb1 \strokec4 \
+\cb3     \cf12 \strokec12 else\cf4 \strokec4 :\cb1 \
+\cb3         my_padding = \cf9 \strokec9 50\cf4 \cb1 \strokec4 \
+\
+\cb3     baseline_max = \cf9 \strokec9 0.00002\cf4 \cb1 \strokec4 \
+\cb3         \cf2 \strokec2 # get subset of data from my_df\cf4 \cb1 \strokec4 \
+\cb3     bird_plot_df = my_df[(hi_point - my_padding):(lo_point + my_padding)]\cb1 \
+\cb3         \cf2 \strokec2 # get a df with only baseline data\cf4 \cb1 \strokec4 \
+\cb3     bird_baseline_df = bird_plot_df.loc[bird_plot_df[\cf10 \strokec10 'pct_chg_abs'\cf4 \strokec4 ] < baseline_max]\cb1 \
+\cb3     bird_baseline_mean = bird_baseline_df[\cf10 \strokec10 "Measure"\cf4 \strokec4 ].mean()\cb1 \
+\
+\cb3     \cf12 \strokec12 return\cf4 \strokec4  bird_baseline_mean, bird_plot_df\
+\
+\cf5 \strokec5 def\cf4 \strokec4  \cf6 \strokec6 mom_find_target_values\cf4 \strokec4 (\cf7 \strokec7 my_df\cf4 \strokec4 , \cf7 \strokec7 my_window\cf4 \strokec4 ):\cb1 \
+\cb3         \cf2 \strokec2 # gets a df to work with that has all the original columns, condense to one 'Measure/\cf4 \cb1 \strokec4 \
+\cb3         \cf2 \strokec2 # gets my_window to determine the rolling window on which pct change is based\cf4 \cb1 \strokec4 \
+\cb3         \cf2 \strokec2 # condense into one column to do the calculations, setup the data we need to make decisions \cf4 \cb1 \strokec4 \
+\cb3         \cf2 \strokec2 # uses pct change from a rolling window to decide what to include \cf4 \cb1 \strokec4 \
+\cb3     \cb1 \
+\cb3     my_df = my_df[ \cf10 \strokec10 'Measure'\cf4 \strokec4 ].to_frame()\cb1 \
+\cb3     my_df[\cf10 \strokec10 'roll_std'\cf4 \strokec4 ] = my_df[\cf10 \strokec10 'Measure'\cf4 \strokec4 ].rolling(my_window, \cf7 \strokec7 center\cf4 \strokec4  = \cf5 \strokec5 True\cf4 \strokec4 ).std() \cb1 \
+\cb3     my_df[\cf10 \strokec10 'roll_mean'\cf4 \strokec4 ] = my_df[\cf10 \strokec10 'Measure'\cf4 \strokec4 ].rolling(my_window, \cf7 \strokec7 center\cf4 \strokec4  = \cf5 \strokec5 True\cf4 \strokec4 ).mean()\cb1 \
+\cb3     my_df[\cf10 \strokec10 'pct_chg'\cf4 \strokec4 ] = my_df[\cf10 \strokec10 'roll_mean'\cf4 \strokec4 ].pct_change()\cb1 \
+\cb3     my_df[\cf10 \strokec10 'pct_chg_abs'\cf4 \strokec4 ] = my_df[\cf10 \strokec10 'pct_chg'\cf4 \strokec4 ].abs()\cb1 \
+\cb3     \cb1 \
+\cb3     \cf2 \strokec2 ### make a numpy array so that we can do quick math\cf4 \cb1 \strokec4 \
+\cb3     my_numpy_array = my_df[\cf10 \strokec10 "pct_chg"\cf4 \strokec4 ].to_numpy()\cb1 \
+\
+\cb3     \cf2 \strokec2 ## find the interval of interest between the high and low points - assumes MOM "behavior"\cf4 \cb1 \strokec4 \
+\cb3     \cf2 \strokec2 ##     hi poinr is positive change with stepping on MOM, low is negative change in exiting\cf4 \cb1 \strokec4 \
+\cb3     \cf2 \strokec2 ##     do I need to adjust this in case opposite direction? which occurs first?\cf4 \cb1 \strokec4 \
+\cb3     hi_point = np.nanargmax(my_numpy_array)\cb1 \
+\cb3     lo_point = np.nanargmin(my_numpy_array)\cb1 \
+\cb3     \cf2 \strokec2 ## get the actual values at those points - not really needed yet, so don't express\cf4 \cb1 \strokec4 \
+\cb3     \cf2 \strokec2 # lo_value = my_df["pct_chg"].iloc[lo_point]\cf4 \cb1 \strokec4 \
+\cb3     \cf2 \strokec2 # hi_value = my_df["pct_chg"].iloc[hi_point]\cf4 \cb1 \strokec4 \
+\
+\cb3     \cf12 \strokec12 return\cf4 \strokec4  lo_point, hi_point, my_df\cb1 \
+\
+\
+\cf5 \cb3 \strokec5 def\cf4 \strokec4  \cf6 \strokec6 add_titlebox\cf4 \strokec4 (\cf7 \strokec7 ax\cf4 \strokec4 , \cf7 \strokec7 text\cf4 \strokec4 ):\cb1 \
+\cb3     ax.text(\cf9 \strokec9 .02\cf4 \strokec4 , \cf9 \strokec9 .9\cf4 \strokec4 , text,   \cf2 \strokec2 ## proportion left to right, proportion bottom to top, the text\cf4 \cb1 \strokec4 \
+\cb3         \cf7 \strokec7 horizontalalignment\cf4 \strokec4 =\cf10 \strokec10 'left'\cf4 \strokec4 ,\cb1 \
+\cb3         \cf7 \strokec7 transform\cf4 \strokec4 =ax.transAxes,\cb1 \
+\cb3         \cf7 \strokec7 fontsize\cf4 \strokec4 =\cf9 \strokec9 10\cf4 \strokec4 )\cb1 \
+\cb3     \cf12 \strokec12 return\cf4 \strokec4  ax\cb1 \
+\
+\pard\pardeftab720\sl360\partightenfactor0
+\cf4 \
+}
