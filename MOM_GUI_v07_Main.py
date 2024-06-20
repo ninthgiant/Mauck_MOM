@@ -65,6 +65,7 @@ def Set_Globals():
     global user_INPATH
     global user_BURROW
     global data_DATE
+    global the_Burrrow
 
     global data ## this  is a dataframe to be defined later
     global calibrations
@@ -97,8 +98,8 @@ def Set_Globals():
     global cal2_value
     global cal3_value
 
-    global my_SPS ## set the SPS used for time calculation 
-    my_SPS = 80
+    global my_SPS ## set the SPS used for time calculation - how manypoints per second based on unix time stamp diff betwen success 300 pts on 6/19/2024
+    my_SPS = 60
 
     global my_std  # to keep track of the automation parameters
     global my_rolling_window
@@ -178,6 +179,7 @@ def mom_cut_button(my_Mean_Type):
 ####
 def mom_open_file_dialog(to_show):
     global data_DATE
+
     my_testing = False # delete this on cleanup
     
     f_types = [('CSV files',"*.csv"), ('TXT',"*.txt") ]
@@ -186,7 +188,9 @@ def mom_open_file_dialog(to_show):
     else:
         f_name = "/Users/bobmauck/devel/LHSP_MOM_GUI/main/Data_Files/185_One_Bird_70K_110K.TXT"
 
-    dispName = f_name[(len(f_name)-60):len(f_name)]
+    # the_Burrrow = "999"
+
+    # dispName = the_Burrow + ": " + f_name[(len(f_name)-60):len(f_name)]
 
     if(len(f_name)==0):
         open_dialog("Error","No file chosen. Try again.")
@@ -353,8 +357,6 @@ def getTracePointPair(my_df, category, markers=None, axesLimits=None):
     # Confirm the plot was not exited before both points were marked
     isGood = dm.isGood
 
-    # Debugging print
-    print("######## DEBUG info ##########")
     print("""
     Measured {category} from {start} to {end}.
     Mean {category} measurement is {mean}.
@@ -648,6 +650,8 @@ def my_Do_Calibrations(my_dataframe):
 #######
 def Do_Bird(my_DataFrame, category):
 
+        global the_Burrow
+
         bird_cal_mean, bird_cal_markers, bird_cal_good, bird_cal_axesLimits = getTracePointPair(my_DataFrame, "Calibration[Bird]")
         bird_data_mean, bird_data_markers, bird_data_good, bird_data_axesLimits = getTracePointPair(my_DataFrame, category, bird_cal_markers, bird_cal_axesLimits)
 
@@ -671,24 +675,34 @@ def Do_Bird(my_DataFrame, category):
             my_Eval = "Bad"
 
         data_DATE = my_DataFrame.Datetime.iloc[0]
+        #data_DATE2 = bird_data_markers[bird_data_markers["Point"]=="Start"].Datetime[0]
+        start_datetime = bird_data_markers.loc[bird_data_markers['Point'] == 'Start', 'Datetime'].iloc[0]
+
+
+        print("###################### DEBUG bird_data_markers:")
+        print(bird_data_markers)
+        print("Start time: ")
+        print(start_datetime)
 
         # Allow the user to input extra details for a "Notes" column
-        bird_details = my_Eval + "-" + askstring('Bird', 'Enter brief details')
+        bird_details = askstring('Bird', 'Enter brief details')
+        if (bird_details == None): 
+            bird_details = "N/A"
 
         # Add the info about this bird to the accumulating lists
         birds_datetime_starts.append(my_Points) # maybe replace this wih the Span in seconds
-        birds_datetime_ends.append(my_Span) # maybe replace this wih the Span in points
-        birds_data_means.append(bird_data_mean) 
-        birds_cal_means.append(bird_cal_mean)
-        birds_baseline_diff.append(bird_baseline_diff)
+        birds_datetime_ends.append(round(my_Span,2)) # maybe replace this wih the Span in points
+        birds_data_means.append(round(bird_data_mean,1)) 
+        birds_cal_means.append(round(bird_cal_mean,1))
+        birds_baseline_diff.append(round(bird_baseline_diff,1))
         birds_regression_mass.append(bird_regression_mass)
-        birds_details.append(bird_details)
+        birds_details.append(the_Burrow + ": " + bird_details)
 
         # Show user info from the calculations
-        t3.insert("1.0", "\tTime:       \t" + data_DATE + "\n") #3 add to Text widget
+        t3.insert("1.0", "\tTime:       \t" + start_datetime + "\n") #3 add to Text widget
         t3.insert("1.0", "\tPoints (s): \t" + str(my_Points) + " (" + str(round(my_Span,1)) + "s)" + "\n") #2 add to Text widget
         t3.insert("1.0", "\tBird Mass:  \t" + str(bird_regression_mass) + " - " + my_Eval + "\n") #2 add to Text widget
-        t3.insert("1.0", "File: " + user_BURROW + " - Weight Calculation:" + "\n") # 1 add to Text widget
+        t3.insert("1.0", "Burr: " + the_Burrow + " File: " + user_BURROW + " - " + bird_details + "\n") # 1 add to Text widget
 
 
 #############################
@@ -704,6 +718,15 @@ def Do_Bird(my_DataFrame, category):
 #######
 def Do_Multiple_Birds(my_DataFrame, category):
     global birds
+    global the_Burrow
+
+            # Allow the user to input the burrow this is from
+    the_Burrow = askstring('Burrow', 'Enter burrow number')
+    if (the_Burrow == None):  # (len(the_Burrow) == 0)|(
+        the_Burrow = "N/A"
+    if (len(the_Burrow) == 0):
+        the_Burrow = "N/A"
+
     Set_Globals()  # reset the saved birds
     # assumes have lists declared as global
     # Allow the user to continue entering birds for as many times as she wants
@@ -714,7 +737,7 @@ def Do_Multiple_Birds(my_DataFrame, category):
             break
 
     # Done entering bird data - Make the accumulated bird info into a clean dataframe for exporting
-    birds = pd.DataFrame({"Burrow":user_BURROW,
+    birds = pd.DataFrame({"Burrow - Field": the_Burrow + " - " +user_BURROW,
                           "Date":data_DATE,
                           "Data_pts":birds_datetime_starts,
                           "Duration_secs":birds_datetime_ends,
@@ -743,9 +766,10 @@ def Do_Multiple_Birds(my_DataFrame, category):
 def Output_MOM_Data():
 
     # Export summary info, including calibration info, to file
+    data_name = user_BURROW.replace("DL", "AN")
     path_summary = "Burrow_{burrow}_{date}_SUMMARY.txt".format(burrow=user_BURROW, date=data_DATE)
 
-    path_summary = filedialog.asksaveasfile(initialdir = my_Save_Dir, initialfile = user_BURROW,
+    path_summary = filedialog.asksaveasfile(initialdir = my_Save_Dir, initialfile = data_name,  # changed from user_BURROW
                                     defaultextension= '.csv',
                                     filetypes=[
                                         ("Text file",".txt"),

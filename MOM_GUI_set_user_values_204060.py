@@ -10,9 +10,9 @@ global cal2_value
 global cal3_value
 
 ## SET THESE VALUES to match the standard weights you use in the field
-cal1_value = 15.97 	# 20 # replaced old values with weight of 3 nuts
-cal2_value = 32.59	# 40
-cal3_value = 50.22	# 60
+cal1_value = 20
+cal2_value = 40
+cal3_value = 60
 
 # Default figure view - don't change these
 global default_figure_width
