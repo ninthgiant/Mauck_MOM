@@ -8,4 +8,4 @@ As of June 9, 2024, the latest version is MOM_GUI_v07_Main.py. It is reorganized
   MOM_Graphing_v07.py
   MOM_Utility_v05.py
 
-From terminal, run MOM_GUI_v07.py
+From terminal, run MOM_GUI_Main_v07.py
