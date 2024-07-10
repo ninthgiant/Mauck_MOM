@@ -83,3 +83,45 @@ def my_Do_Calibrations(my_dataframe):
         good_to_go = False
 
     return good_to_go
+
+
+################
+#  calc_Penguin_W2: Algorithm from Afanasyev et al. 2015
+#    RAM 6/25/2024 with help from ChatGPT
+#       receives a dataframe with strain and unix time, the markers dataframe defining the subset of dataframe to use
+#           also receives 
+#       Lets user indicate baseline as normal
+#           then, start and end points, as per normal
+#           NEW: does the Penguin calculation between those two points
+#       Penguin Calculation
+#          a = Get Slope -> between the points (start and end)
+#          g = 9.8
+#          W1 = Mean Value between the two points - all normal to this point
+#          W2 = W1 ( 1 + a/g)
+#    
+#    returns tuple with information about the result of the calculations
+#    code below is hte complete do_Bird, but need to figure out where this goes and how it works with Do_Bird or mom_cut_Button
+#######
+def calc_Penguin_W2(my_data, markers, W1, SPS=60):
+    # Define gravitational constant
+    g = 9.81
+    
+    # Extract start and end indices from 'markers' dataframe
+    start_index = markers.loc[0, "Index"]
+    end_index = markers.loc[1, "Index"]
+    
+    # Extract subset of 'Measure' series from 'my_data' dataframe
+    measure_series = my_data.loc[start_index:end_index, "Measure"]
+    
+    # Calculate original slope of the extracted 'Measure' series
+    x_values = np.arange(len(measure_series))
+    slope, _ = np.polyfit(x_values, measure_series, 1)
+    
+    # Compensate for the sampling interval
+    sampling_interval = 1 / SPS
+    adj_slope = slope / sampling_interval
+    
+    # Calculate W2 using the adjusted slope
+    W2 = W1 + W1 * (1 + adj_slope / g)
+    
+    return W2
