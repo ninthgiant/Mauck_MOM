@@ -125,3 +125,214 @@ def calc_Penguin_W2(my_data, markers, W1, SPS=60):
     W2 = W1 + W1 * (1 + adj_slope / g)
     
     return W2
+
+
+
+#########################
+#   do_Slope_0: A function to find the slope that is zero from all subsets of the trace, then return start and stop of that subset
+#       RAM, July 11, 2024
+#       ARGUMENTS: 
+#       1) the array to start the process - see do_Bird to see how to get a measure_series to send to this function
+#       2) starting point for the series that has been marked wihtin that series
+#       3) end point to mark wihtin the series
+#       4) smalles window we will consider - user input, but 20-30 points based on data in handd
+#       5) How big can the window be relative to the overall size of the marked subset?
+#
+#       RETURNS:
+#       1) series on which to do calculations based on calibrations, etc., W1 or W2
+########
+def do_Slope_0(measure_series, start_pt, stop_pt, min_len, max_pct = 0.5):
+
+    print("################# DEBUG: read values from screen inside generate_final_series ##############")
+    print(f"Threshold: {threshold}")
+
+
+    max_len = (stop_pt - start_pt) * max_pct
+    total_windows = max_len - min_len           # number of windows to cycle thru each time
+    trace_len = stop_pt - start_pt - 1              # how many points to iterate over
+
+    for i in range(start_pt, stop_pt)
+        for w in range( min_len, max_len )
+            win_start = i - int(w/2)
+            win_end = i + int(w/2)
+
+            # see do_Bird to see how to get a measure_series to send to this function
+            # need the subset of measure_series defined by win_star and win_end
+            curr_trace = measure_series                      
+
+            ###########
+            # calc stats of this vector
+            ###
+            w_slope, w_slopeintercept = np.polyfit(curr_trace, vector, 1)
+            
+
+
+    # Create the FWD and BkWD series (initially empty)
+    FWD_series = np.zeros_like(input_array, dtype=int)
+    BKWD_series = np.zeros_like(input_array, dtype=int)
+
+    # Populate the FWD and BKWD series based on comparisons with the threshold
+    for i in range(1, len(input_array) - 1):
+        current_value = input_array[i]
+        previous_value = input_array[i - 1]
+        next_value = input_array[i + 1]
+
+        # Check conditions using the threshold and populate the FWD series
+        if abs(current_value - next_value) < threshold:
+            FWD_series[i] = 1
+        else:
+            FWD_series[i] = 0
+
+        # Check conditions using the threshold and populate the BKWD series
+        if abs(current_value - previous_value) < threshold:
+            BKWD_series[i] = 1
+        else:
+            BKWD_series[i] = 0
+
+    # Create a third 'empty' array the size of the BKWD_series that sums BKWD and FWD
+    sum_array = BKWD_series + FWD_series
+
+    # sum array - a 1 value is a start or stop value; a 2 value is middle, a 0 is not a series
+    # step through the array, when encounter a 1 set flg to a new series until a 2nd 1 is encountered, then flg is false
+
+    # count array - steps through sum array and identifies start and stop points to count length of series
+    # count in each direction, so need 2 arrays for the counts and one array for the sum of counts
+
+    Count_FWD_array = np.zeros_like(input_array, dtype=int)
+    Count_BKWD_array = np.zeros_like(input_array, dtype=int)
+    Count_Sum_array = np.zeros_like(input_array, dtype=int)
+
+    # Counter variable for the count array
+    counter = 0
+    # variable to track if in a distinct series
+    inside = 0  # is 1 when we are inside a series, treat it like a boolean
+
+    # Populate the Count_FWD_array using a counter
+    for i in range(len(Count_FWD_array)):
+        if sum_array[i] ==1 and inside == 0:  # we have the start with a 1 which is how it is supposed to work - ADDED THIS
+            counter += 1
+            Count_FWD_array[i] = counter
+            inside = 1  # we are now in a series
+        elif sum_array[i] == 2 and inside == 0:  # we have the start when doing a calibration or starting within a long series of consistant
+            counter += 1
+            Count_FWD_array[i] = counter
+            inside = 1  # we are now in a series
+        elif sum_array[i] == 1 and inside == 1:  # we have the end:
+            counter += 1
+            Count_FWD_array[i] = counter
+            inside = 0
+            counter = 0
+        elif sum_array[i] == 2 and inside == 1:  # we have the middle:
+            counter += 1
+            Count_FWD_array[i] = counter
+        else:  # we are not in a series
+            counter = 0
+            Count_FWD_array[i] = 0
+
+    # Populate the Count_BKWD_array using a counter
+    for i in range(len(Count_BKWD_array) - 1, -1, -1):
+        if sum_array[i] == 1 and inside == 0:  # we have the start
+            counter += 1
+            Count_BKWD_array[i] = counter
+            inside = 1  # we are now in a series
+        elif sum_array[i] ==2 and inside == 0:  # we have the start
+            counter += 1
+            Count_BKWD_array[i] = counter
+            inside = 1  # we are now in a series
+        elif sum_array[i] == 1 and inside == 1:  # we have the end:
+            counter += 1
+            Count_BKWD_array[i] = counter
+            inside = 0
+            counter = 0
+        elif sum_array[i] == 2 and inside == 1:  # we have the middle:
+            counter += 1
+            Count_BKWD_array[i] = counter
+        else:  # we are not in a series
+            counter = 0
+            Count_BKWD_array[i] = 0
+
+    # Populate the Count_Sum_array array by adding values from BkWD and FWD
+    for i in range(len(Count_FWD_array)):
+        Count_Sum_array[i] = Count_BKWD_array[i] + Count_FWD_array[i]
+
+    # Create a fourth 'empty' array the size of the Count_Sum_array array
+    final_array = np.zeros_like(input_array, dtype=int)
+
+    count_criterion = myLen  # what qualifies as a series - might need to adjust +/- 1
+
+    # Populate the fourth array based on conditions
+    for i in range(len(final_array)):
+        if Count_Sum_array[i] > count_criterion:
+            final_array[i] = input_array[i]
+        else:
+            final_array[i] = 0
+
+    # this is the resulting array from which to calculate a mean value
+    return final_array
+
+
+#########################
+#   calc_Mean_Measure_Consec: A function to estimate the value needed to represent the mean of the passed array
+#       replaces single call to statistics.mean(measures) with calc_Mean_Measure
+#       Assumes have numpy and pandas loaded as np and pd
+#       Calls generate_final_series to get the values from which to calculate the mean
+#       Those points are used to calc a mean value for the weighed object
+########
+def calc_Mean_Measure_Consec(mydf, threshold = 400, myLen = 7):
+
+  
+    ## Get what is on screen - might eliminate them as arguments
+    threshold = float(my_entries2_AUTO[1].get())
+    myLen = float(my_entries2_AUTO[0].get())
+
+    # Convert the Pandas Series to a NumPy array
+    measures_array = mydf.values
+   
+    # Get a new list of values within threshold
+    steady_points = generate_final_series(measures_array, threshold, myLen)
+
+    # Create a new series composed of values in the fourth series that are > 0 - can I do this 
+    filtered_final_series = steady_points[steady_points > 0]
+
+    # Get the size of the array
+    array_size = filtered_final_series.size
+
+    ## print these for debugging purposes
+    print("################# DEBUG: read values from screen ##############")
+    print(f"Threshold: {threshold}")
+    print(f"Length: {myLen}")
+    print(f"SIZE OF ARRAY: {array_size}")
+
+    if(array_size == 0):
+        open_dialog("Error","Too few qualifying points.")
+        return (0)
+
+    # Take those points that qualify and get their mean and return it
+    myMean = np.mean(filtered_final_series)
+
+    ###### print info for debugging:
+    # Count
+    count = np.count_nonzero(filtered_final_series)
+
+    # Range
+    range_value = np.max(filtered_final_series) - np.min(filtered_final_series)
+
+    # mean distance
+    Diff_series = np.zeros_like(filtered_final_series, dtype=int)
+    for i in range(1, len(Diff_series) -1):
+        Diff_series[i]= abs(filtered_final_series[i]- filtered_final_series[i + 1])
+    mean_Diff = np.mean(Diff_series)
+
+    # Standard Deviation (STD)- may use this later for automation
+    std_value = np.std(filtered_final_series)
+
+    ## print these for debugging purposes
+    print("################# DEBUG: calculation results ##############")
+    print(f"Mean: {myMean}")
+    print(f"Count: {count}")
+    print(f"MeanDiff: {mean_Diff}")
+    print(f"Range: {range_value}")
+    print(f"Standard Deviation: {std_value}")
+    ############ END of debugging print
+
+    return myMean

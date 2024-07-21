@@ -1,2 +1,0 @@
-Burrow,Date,Data_pts,Duration_secs,Mean_Data_Strain,Mean_Calibration_Strain,Baseline_Difference,Regression_Mass,Details
-DL_06_02,2024-06-02 20:47:12,414,5.175,8606252.959349593,8517855.44262295,88397.51672664285,41.53,Good-one
