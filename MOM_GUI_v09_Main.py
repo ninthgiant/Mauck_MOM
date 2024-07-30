@@ -343,7 +343,7 @@ def getTracePointPair(my_df, category, markers=None, axesLimits=None):
 
         # reduce the size of array to only qualifying points - automation
         measures_series = pd.Series(measures, name='Measures Series')
-
+        
         mean = calc_Mean_Measure_Consec(measures_series, 400,7)  # change to get screen values
     else:
         mean = statistics.mean(measures)  # just calculate on whatever is in the array 'measures'
@@ -625,7 +625,119 @@ def remove_outliers_and_count(measure_series):
     
     return reduced_series, num_above_2std, num_below_2std
 
+import pandas as pd
+import numpy as np
 
+##############
+# do_Slope_0 - RAM 7/23/2024
+#    Function to ID best value for conversion to bird weight
+#    Parameters:
+#    - measure_series: DataFrame  containing the measure data. Get the the whole dataframe, so you can go oustide bounds
+#       - of the window of interst of your f\jull slope measures
+#    - start_pt: Starting point (long integer). where to start and end the window counting
+#    - stop_pt: Ending point (long integer).  could just be the lenght of the slice we are sending it when using real data
+#    - min_len: Minimum length of windows (long integer). We have data that could determine the right number for this
+#    - min_threshold: Minimum threshold for the intercept value (real number).
+#    - max_pct: Max proportion of the passed series to be used to determine the max length of windows (real number, default is 0.5).
+# 
+#   Returns:
+#    - Mean Value for calculation of mass
+#########
+def do_Slope_0(measure_series, start_pt, stop_pt, min_len, min_threshold, max_pct=0.5):
+
+    do_print = False
+
+    #if isinstance(measure_series, pd.DataFrame):
+     #   measure_series = measure_series.squeeze()
+
+    max_len = int((stop_pt - start_pt) * max_pct)
+    if(max_len <= min_len):
+        max_len = min_len + 2 # (stop_pt - start_pt)
+    total_windows = max_len - min_len
+    trace_len = stop_pt - start_pt - 1
+
+    if(do_print):
+        print(f"max_len: {max_len}")
+        print(f"total_windows: {total_windows}")
+        print(f"trace_len: {trace_len}")
+
+    if total_windows <= 0:
+        raise ValueError("total_windows must be greater than 0")
+
+    rows = []
+
+    for i in range(start_pt, stop_pt):
+        for w in range(min_len, max_len):
+            v_start = int(i - (w/2)) - 1
+            v_stop = int(i + (w/2))
+
+            if (w % 2 != 0):
+                v_start = v_start - 1
+
+            new_series = measure_series.iloc[v_start:v_stop]
+            if(do_print):
+                print(f"\nnew_series (i={i}, w={w}):\n{new_series}")
+
+            if len(new_series) < 2:
+                continue
+
+            x_values = np.arange(len(new_series))
+            slope, intercept = np.polyfit(x_values, new_series['Measure'], 1)
+            mean_val = new_series['Measure'].mean()
+
+            if(do_print):
+                print(f"x_values: {x_values}")
+                print(f"slope: {slope}")
+                print(f"intercept: {intercept}")
+                print(f"mean_val: {mean_val}")
+
+            wt_calc = np.random.uniform(0, 100)
+
+            row_data = {
+                'slope': slope,
+                'intercept': intercept,
+                'wt_calc': wt_calc,
+                'center_pt': i,
+                'total_len': w,
+                'v_start': v_start,
+                'v_stop': v_stop,
+                'mean_val': mean_val
+            }
+
+            rows.append(row_data)
+
+    results_df = pd.DataFrame(rows, columns=['slope', 'intercept', 'wt_calc', 'center_pt', 'total_len', 'v_start', 'v_stop', 'mean_val'])
+    results_df['slope_abs'] = abs(results_df['slope'])
+
+    mymin = results_df['slope_abs'].min()
+
+    if(do_print):
+        print("Results DataFrame:")
+        print(results_df.head())
+        print(f"Min slope_abs value: {mymin}")
+
+        # Get the row with the smallest values of 'slope_abs'
+    filtered_df = results_df.nsmallest(1, 'slope_abs')
+        # make sure it is above the background values
+    filtered_df = filtered_df[filtered_df['mean_val'] >= min_threshold]
+
+    if(do_print):
+        print("Filtered DataFrame with 5 smallest slope_abs values:")
+        print(filtered_df)
+        print("Filtered DataFrame after mean_val threshold filter:")
+        print(filtered_df.head())
+
+
+    if not filtered_df.empty:
+        min_abs_slope_mean = filtered_df['mean_val'].mean() 
+        if(do_print):
+            print(f"\nMean Value of the minimum absolute slope value row ({min_abs_slope_mean}):")
+        return round(min_abs_slope_mean,1)
+    
+
+    else:
+        print("\nFiltered DataFrame is empty.")
+        return 0
 
 
 ################
@@ -747,21 +859,27 @@ def Do_Bird(my_DataFrame, category):
             W2 = round(calc_W2_Penguin(measure_series, W1, cal_gradient, cal_intercept, my_SPS),2)
 
             # Calc W3
-            # Remove outliers and get the reduced series along with the number of values above and below 2 STD
-            reduced_series, num_above_2std, num_below_2std = remove_outliers_and_count(measure_series)
-            print("Remove outliers (2STD)")
-            print(f"\nNumber of values above 2 STD: {num_above_2std}")
-            print(f"Number of values below 2 STD: {num_below_2std}")
-            newDiff = reduced_series.mean() - bird_cal_mean
-            W3 = round(newDiff * cal_gradient + cal_intercept, 2)
-            ###### This does not work! ########
+            # using do_Slope_0
 
+            ### estimate a threshold that is at least a 25% of the other mean bird value over the background value
+            est_threhold = round(((bird_data_mean - bird_cal_mean) *0.25) + bird_cal_mean,1)
+        
+            print(f'est threshold: {est_threhold}\tstart index: {start_index}\tend index: {end_index}')
+            print(f'length of measure_series: {len(measure_series)}')
+
+            if((end_index - start_index) < 100):
+                mean_slope_0 = do_Slope_0(my_DataFrame, start_index, end_index, 25, est_threhold, 0.7)
+                newDiff = mean_slope_0 - bird_cal_mean
+                W3 = round(newDiff * cal_gradient + cal_intercept, 2)
+            else:       ### too long to go through all the windows, plus it is just fine with other methods
+                W3 = W2
+            
 
             print("############## Span from new code: ")
             print(end_index - start_index)
             # print(f'W1: {W1} W2: {W2} W3: {W3}')
-            print(f'W1\tW2\tW3\tnum_above\tnum_below')
-            print(f'{the_Burrow}\t{W1}\t{W2}\t{W3}\t{num_above_2std}\t{num_below_2std}')
+            print(f'Burr\tW1\tW2\tW3')
+            print(f'{the_Burrow}\t{W1}\t{W2}\t{W3}')
 
         measure_start = bird_data_markers.index[0]
         measure_end = bird_data_markers.index[1]
@@ -908,7 +1026,53 @@ def Output_MOM_Data():
 #   MOM_defaults_from_file - Get user defined default values form external file
 ########
 def MOM_defaults_from_file():
-    exec(open("MOM_GUI_set_user_values.py").read())  # feature request - make this accessible from within the app itself for changes
+    # exec(open("MOM_GUI_set_user_values.py").read())  # feature request - make this accessible from within the app itself for changes
+    #
+    # SET Some user-specific data - temporary solution - don't use an external file for now so can make app
+    #  This must be in same folder as the MOM_Processor_v03.py file
+    #  Will eventually be replaced by a text file
+    #
+
+    # Calibration values, in grams
+    global cal1_value
+    global cal2_value
+    global cal3_value
+
+    ## SET THESE VALUES to match the standard weights you use in the field
+    cal1_value = 15.97 	# 20 # replaced old values with weight of 3 nuts
+    cal2_value = 32.59	# 40
+    cal3_value = 50.22	# 60
+
+    # Default figure view - don't change these
+    global default_figure_width
+    global default_figure_height
+
+    # Default figure view - don't change these
+    default_figure_width = 15
+    default_figure_height = 10
+
+    # for experimental automation process - don't change this
+    global default_window
+
+    default_window = 5  # points needed for the automated process - don't change this
+
+    ## directories for saving, opening files
+    global myDir
+    global my_Save_Dir
+    global my_Save_Real_Dir
+    global datafile_folder_path
+    global datafiles
+
+    ### SET THESE VALUES to match your file structure
+    myDir = "/Users/bobmauck/devel/LHSP_MOM_GUI/Programming/Code_python/Data_Files/Cut_With_Calib"
+
+    default_window = 5
+
+    my_Save_Dir = "/Users/bobmauck/devel/LHSP_MOM_GUI/Programming/output_files"  ### wehre to save the output files
+
+    print("done setting user values")
+    
+    
     print("Done setting defaults: "+str(cal1_value)+", "+str(cal2_value)+", "+str(cal3_value))
 
 ###########################################

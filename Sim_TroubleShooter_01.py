@@ -39,15 +39,15 @@ def do_Stats(chick_feeds_df):
 def MOM_simulation():
     global N_Birds_in_Group, N_Groups, body_mean, body_STD, Trip_per_bird
     global load_mean, load_STD, Err_mean, Err_STD, max_MOM_Err_stds
-    global Delivery_mean, Delivery_STD, Group_extras_Pct
+    global Delivery_mean, Delivery_STD, Group_extras_Pct, Group_extras
 
-    N_Birds_in_Group = 10
+    N_Birds_in_Group = 15
     N_Groups = 2
     body_mean = 45
     body_STD = 1
     body_min = 40
     body_max = 55
-    Trip_per_bird = 3
+    Trip_per_bird = 10
     load_mean = 9.5
     load_STD = 2
     load_min = 4
@@ -59,8 +59,8 @@ def MOM_simulation():
     max_MOM_Err_std = 4
     Delivery_mean = 8.67
     Delivery_STD = 2.94
-    Group_extras_Pct = 0
-    Group_extras = [0, 0]
+    Group_extras_Pct = .2
+    Group_extras = [0, 2]
 
     bird_dfs = []
     chick_feeds_data = []

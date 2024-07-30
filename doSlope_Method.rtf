@@ -1,0 +1,130 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2761
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fnil\fcharset0 Menlo-Regular;}
+{\colortbl;\red255\green255\blue255;\red15\green112\blue1;\red255\green255\blue255;\red0\green0\blue0;
+\red0\green0\blue255;\red96\green66\blue24;\red109\green109\blue109;\red19\green118\blue70;\red24\green38\blue108;
+\red37\green127\blue159;\red122\green0\blue183;\red144\green1\blue18;\red216\green0\blue25;\red167\green88\blue250;
+}
+{\*\expandedcolortbl;;\cssrgb\c0\c50196\c0;\cssrgb\c100000\c100000\c100000;\cssrgb\c0\c0\c0;
+\cssrgb\c0\c0\c100000;\cssrgb\c45490\c32549\c12157;\cssrgb\c50196\c50196\c50196;\cssrgb\c3529\c52549\c34510;\cssrgb\c12157\c21569\c49804;
+\cssrgb\c16863\c56863\c68627;\cssrgb\c56078\c3137\c76863;\cssrgb\c63922\c8235\c8235;\cssrgb\c88627\c12157\c12157;\cssrgb\c71765\c46275\c98431;
+}
+\margl1440\margr1440\vieww21220\viewh12600\viewkind0
+\deftab720
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs24 \cf2 \cb3 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 ##############\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 # do_Slope_0 - RAM 7/23/2024\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 #    Function to ID best value for conversion to bird weight\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 #    Parameters:\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 #    - measure_series: DataFrame  containing the measure data. Get the the whole dataframe, so you can go oustide bounds\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 #       - of the window of interst of your f\\jull slope measures\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 #    - start_pt: Starting point (long integer). where to start and end the window counting\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 #    - stop_pt: Ending point (long integer).  could just be the lenght of the slice we are sending it when using real data\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 #    - min_len: Minimum length of windows (long integer). We have data that could determine the right number for this\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 #    - min_threshold: Minimum threshold for the intercept value (real number).\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 #    - max_pct: Max proportion of the passed series to be used to determine the max length of windows (real number, default is 0.5).\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 # \cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 #   Returns:\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 #    - Mean Value for calculation of mass\cf0 \cb1 \strokec4 \
+\cf2 \cb3 \strokec2 #########\cf0 \cb1 \strokec4 \
+\pard\pardeftab720\partightenfactor0
+\cf5 \cb3 \strokec5 def\cf0 \strokec4  \cf6 \strokec6 do_Slope_0\cf0 \strokec4 (\cf7 \strokec7 measure_series\cf0 \strokec4 , \cf7 \strokec7 start_pt\cf0 \strokec4 , \cf7 \strokec7 stop_pt\cf0 \strokec4 , \cf7 \strokec7 min_len\cf0 \strokec4 , \cf7 \strokec7 min_threshold\cf0 \strokec4 , \cf7 \strokec7 max_pct\cf0 \strokec4 =\cf8 \strokec8 0.5\cf0 \strokec4 ):\cb1 \
+\
+	## for debugging purposes\
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3     \cf9 \strokec9 do_print\cf0 \strokec4  = \cf5 \strokec5 False\cf0 \cb1 \strokec4 . \
+\
+\cb3     \cf9 \strokec9 max_len\cf0 \strokec4  = \cf10 \strokec10 int\cf0 \strokec4 ((\cf7 \strokec7 stop_pt\cf0 \strokec4  - \cf7 \strokec7 start_pt\cf0 \strokec4 ) * \cf7 \strokec7 max_pct\cf0 \strokec4 )\cb1 \
+\cb3     \cf11 \strokec11 if\cf0 \strokec4 (\cf9 \strokec9 max_len\cf0 \strokec4  <= \cf7 \strokec7 min_len\cf0 \strokec4 ):\cb1 \
+\cb3         \cf9 \strokec9 max_len\cf0 \strokec4  = \cf7 \strokec7 min_len\cf0 \strokec4  + \cf8 \strokec8 2\cf0 \strokec4  \cf2 \strokec2 # (stop_pt - start_pt)\cf0 \cb1 \strokec4 \
+\cb3     \cf9 \strokec9 total_windows\cf0 \strokec4  = \cf9 \strokec9 max_len\cf0 \strokec4  - \cf7 \strokec7 min_len\cf0 \cb1 \strokec4 \
+\cb3     \cf9 \strokec9 trace_len\cf0 \strokec4  = \cf7 \strokec7 stop_pt\cf0 \strokec4  - \cf7 \strokec7 start_pt\cf0 \strokec4  - \cf8 \strokec8 1\cf0 \cb1 \strokec4 \
+\
+\cb3     \cf11 \strokec11 if\cf9 \strokec9 (do_print)\cf0 \strokec4 :\cb1 \
+\cb3         \cf6 \strokec6 print\cf0 \strokec4 (\cf5 \strokec5 f\cf12 \strokec12 "max_len: \cf5 \strokec5 \{\cf9 \strokec9 max_len\cf5 \strokec5 \}\cf12 \strokec12 "\cf0 \strokec4 )\cb1 \
+\cb3         \cf6 \strokec6 print\cf0 \strokec4 (\cf5 \strokec5 f\cf12 \strokec12 "total_windows: \cf5 \strokec5 \{\cf9 \strokec9 total_windows\cf5 \strokec5 \}\cf12 \strokec12 "\cf0 \strokec4 )\cb1 \
+\cb3         \cf6 \strokec6 print\cf0 \strokec4 (\cf5 \strokec5 f\cf12 \strokec12 "trace_len: \cf5 \strokec5 \{\cf9 \strokec9 trace_len\cf5 \strokec5 \}\cf12 \strokec12 "\cf0 \strokec4 )\cb1 \
+\
+\cb3     \cf11 \strokec11 if\cf0 \strokec4  \cf9 \strokec9 total_windows\cf0 \strokec4  <= \cf8 \strokec8 0\cf0 \strokec4 :\cb1 \
+\cb3         \cf11 \strokec11 raise\cf0 \strokec4  \cf10 \strokec10 ValueError\cf0 \strokec4 (\cf13 \strokec13 "\cf12 \strokec12 total_windows must be greater than 0\cf13 \strokec13 "\cf0 \strokec4 )\cb1 \
+\
+\cb3     \cf9 \strokec9 rows\cf0 \strokec4  = []\cb1 \
+\
+\cb3     \cf11 \strokec11 for\cf0 \strokec4  \cf9 \strokec9 i\cf0 \strokec4  \cf11 \strokec11 in\cf0 \strokec4  \cf10 \strokec10 range\cf0 \strokec4 (\cf7 \strokec7 start_pt\cf0 \strokec4 , \cf7 \strokec7 stop_pt\cf0 \strokec4 ):\cb1 \
+\cb3         \cf11 \strokec11 for\cf0 \strokec4  \cf9 \strokec9 w\cf0 \strokec4  \cf11 \strokec11 in\cf0 \strokec4  \cf10 \strokec10 range\cf0 \strokec4 (\cf7 \strokec7 min_len\cf0 \strokec4 , \cf9 \strokec9 max_len\cf0 \strokec4 ):\cb1 \
+\cb3             \cf9 \strokec9 v_start\cf0 \strokec4  = \cf10 \strokec10 int\cf0 \strokec4 (\cf9 \strokec9 i\cf0 \strokec4  - (\cf9 \strokec9 w\cf0 \strokec4 /\cf8 \strokec8 2\cf0 \strokec4 )) - \cf8 \strokec8 1\cf0 \cb1 \strokec4 \
+\cb3             \cf9 \strokec9 v_stop\cf0 \strokec4  = \cf10 \strokec10 int\cf0 \strokec4 (\cf9 \strokec9 i\cf0 \strokec4  + (\cf9 \strokec9 w\cf0 \strokec4 /\cf8 \strokec8 2\cf0 \strokec4 ))\cb1 \
+\
+\cb3             \cf11 \strokec11 if\cf0 \strokec4  (\cf9 \strokec9 w\cf0 \strokec4  % \cf8 \strokec8 2\cf0 \strokec4  != \cf8 \strokec8 0\cf0 \strokec4 ):\cb1 \
+\cb3                 \cf9 \strokec9 v_start\cf0 \strokec4  = \cf9 \strokec9 v_start\cf0 \strokec4  - \cf8 \strokec8 1\cf0 \cb1 \strokec4 \
+\
+\cb3             \cf9 \strokec9 new_series\cf0 \strokec4  = \cf7 \strokec7 measure_series\cf0 \strokec4 .iloc[\cf9 \strokec9 v_start\cf0 \strokec4 :\cf9 \strokec9 v_stop\cf0 \strokec4 ]\
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb1 \
+\pard\pardeftab720\partightenfactor0
+\cf0 \cb3             \cf11 \strokec11 if\cf9 \strokec9 (do_print)\cf0 \strokec4 :\cb1 \
+\cb3                 \cf6 \strokec6 print\cf0 \strokec4 (\cf5 \strokec5 f\cf12 \strokec12 "\cf14 \strokec14 \\n\cf12 \strokec12 new_series (i=\cf5 \strokec5 \{\cf9 \strokec9 i\cf5 \strokec5 \}\cf12 \strokec12 , w=\cf5 \strokec5 \{\cf9 \strokec9 w\cf5 \strokec5 \}\cf12 \strokec12 ):\cf14 \strokec14 \\n\cf5 \strokec5 \{\cf9 \strokec9 new_series\cf5 \strokec5 \}\cf12 \strokec12 "\cf0 \strokec4 )\cb1 \
+\
+\cb3             \cf11 \strokec11 if\cf0 \strokec4  \cf6 \strokec6 len\cf0 \strokec4 (\cf9 \strokec9 new_series\cf0 \strokec4 ) < \cf8 \strokec8 2\cf0 \strokec4 :\cb1 \
+\cb3                 \cf11 \strokec11 continue\cf0 \cb1 \strokec4 \
+\
+\cb3             \cf9 \strokec9 x_values\cf0 \strokec4  = np.\cf6 \strokec6 arange\cf0 \strokec4 (\cf6 \strokec6 len\cf0 \strokec4 (\cf9 \strokec9 new_series\cf0 \strokec4 ))\cb1 \
+\cb3             \cf9 \strokec9 slope\cf0 \strokec4 , \cf9 \strokec9 intercept\cf0 \strokec4  = np.\cf6 \strokec6 polyfit\cf0 \strokec4 (\cf9 \strokec9 x_values\cf0 \strokec4 , \cf9 \strokec9 new_series\cf0 \strokec4 [\cf13 \strokec13 '\cf12 \strokec12 Measure\cf13 \strokec13 '\cf0 \strokec4 ], \cf8 \strokec8 1\cf0 \strokec4 )\cb1 \
+\cb3             \cf9 \strokec9 mean_val\cf0 \strokec4  = \cf9 \strokec9 new_series\cf0 \strokec4 [\cf13 \strokec13 '\cf12 \strokec12 Measure\cf13 \strokec13 '\cf0 \strokec4 ].mean()\cb1 \
+\
+\cb3             \cf11 \strokec11 if\cf9 \strokec9 (do_print)\cf0 \strokec4 :\cb1 \
+\cb3                 \cf6 \strokec6 print\cf0 \strokec4 (\cf5 \strokec5 f\cf12 \strokec12 "x_values: \cf5 \strokec5 \{\cf9 \strokec9 x_values\cf5 \strokec5 \}\cf12 \strokec12 "\cf0 \strokec4 )\cb1 \
+\cb3                 \cf6 \strokec6 print\cf0 \strokec4 (\cf5 \strokec5 f\cf12 \strokec12 "slope: \cf5 \strokec5 \{\cf9 \strokec9 slope\cf5 \strokec5 \}\cf12 \strokec12 "\cf0 \strokec4 )\cb1 \
+\cb3                 \cf6 \strokec6 print\cf0 \strokec4 (\cf5 \strokec5 f\cf12 \strokec12 "intercept: \cf5 \strokec5 \{\cf9 \strokec9 intercept\cf5 \strokec5 \}\cf12 \strokec12 "\cf0 \strokec4 )\cb1 \
+\cb3                 \cf6 \strokec6 print\cf0 \strokec4 (\cf5 \strokec5 f\cf12 \strokec12 "mean_val: \cf5 \strokec5 \{\cf9 \strokec9 mean_val\cf5 \strokec5 \}\cf12 \strokec12 "\cf0 \strokec4 )\cb1 \
+\
+\cb3             \cf9 \strokec9 wt_calc\cf0 \strokec4  = np.random.uniform(\cf8 \strokec8 0\cf0 \strokec4 , \cf8 \strokec8 100\cf0 \strokec4 )\cb1 \
+\
+\cb3             \cf9 \strokec9 row_data\cf0 \strokec4  = \{\cb1 \
+\cb3                 \cf13 \strokec13 '\cf12 \strokec12 slope\cf13 \strokec13 '\cf0 \strokec4 : \cf9 \strokec9 slope\cf0 \strokec4 ,\cb1 \
+\cb3                 \cf13 \strokec13 '\cf12 \strokec12 intercept\cf13 \strokec13 '\cf0 \strokec4 : \cf9 \strokec9 intercept\cf0 \strokec4 ,\cb1 \
+\cb3                 \cf13 \strokec13 '\cf12 \strokec12 wt_calc\cf13 \strokec13 '\cf0 \strokec4 : \cf9 \strokec9 wt_calc\cf0 \strokec4 ,\cb1 \
+\cb3                 \cf13 \strokec13 '\cf12 \strokec12 center_pt\cf13 \strokec13 '\cf0 \strokec4 : \cf9 \strokec9 i\cf0 \strokec4 ,\cb1 \
+\cb3                 \cf13 \strokec13 '\cf12 \strokec12 total_len\cf13 \strokec13 '\cf0 \strokec4 : \cf9 \strokec9 w\cf0 \strokec4 ,\cb1 \
+\cb3                 \cf13 \strokec13 '\cf12 \strokec12 v_start\cf13 \strokec13 '\cf0 \strokec4 : \cf9 \strokec9 v_start\cf0 \strokec4 ,\cb1 \
+\cb3                 \cf13 \strokec13 '\cf12 \strokec12 v_stop\cf13 \strokec13 '\cf0 \strokec4 : \cf9 \strokec9 v_stop\cf0 \strokec4 ,\cb1 \
+\cb3                 \cf13 \strokec13 '\cf12 \strokec12 mean_val\cf13 \strokec13 '\cf0 \strokec4 : \cf9 \strokec9 mean_val\cf0 \cb1 \strokec4 \
+\cb3             \}\cb1 \
+\
+\cb3             \cf9 \strokec9 rows\cf0 \strokec4 .\cf6 \strokec6 append\cf0 \strokec4 (\cf9 \strokec9 row_data\cf0 \strokec4 )\cb1 \
+\
+\cb3     \cf9 \strokec9 results_df\cf0 \strokec4  = pd.\cf10 \strokec10 DataFrame\cf0 \strokec4 (\cf9 \strokec9 rows\cf0 \strokec4 , \cf7 \strokec7 columns\cf0 \strokec4 =[\cf13 \strokec13 '\cf12 \strokec12 slope\cf13 \strokec13 '\cf0 \strokec4 , \cf13 \strokec13 '\cf12 \strokec12 intercept\cf13 \strokec13 '\cf0 \strokec4 , \cf13 \strokec13 '\cf12 \strokec12 wt_calc\cf13 \strokec13 '\cf0 \strokec4 , \cf13 \strokec13 '\cf12 \strokec12 center_pt\cf13 \strokec13 '\cf0 \strokec4 , \cf13 \strokec13 '\cf12 \strokec12 total_len\cf13 \strokec13 '\cf0 \strokec4 , \cf13 \strokec13 '\cf12 \strokec12 v_start\cf13 \strokec13 '\cf0 \strokec4 , \cf13 \strokec13 '\cf12 \strokec12 v_stop\cf13 \strokec13 '\cf0 \strokec4 , \cf13 \strokec13 '\cf12 \strokec12 mean_val\cf13 \strokec13 '\cf0 \strokec4 ])\cb1 \
+\cb3     \cf9 \strokec9 results_df\cf0 \strokec4 [\cf13 \strokec13 '\cf12 \strokec12 slope_abs\cf13 \strokec13 '\cf0 \strokec4 ] = \cf6 \strokec6 abs\cf0 \strokec4 (\cf9 \strokec9 results_df\cf0 \strokec4 [\cf13 \strokec13 '\cf12 \strokec12 slope\cf13 \strokec13 '\cf0 \strokec4 ])\cb1 \
+\
+\cb3     \cf9 \strokec9 mymin\cf0 \strokec4  = \cf9 \strokec9 results_df\cf0 \strokec4 [\cf13 \strokec13 '\cf12 \strokec12 slope_abs\cf13 \strokec13 '\cf0 \strokec4 ].\cf6 \strokec6 min\cf0 \strokec4 ()\cb1 \
+\
+\cb3     \cf11 \strokec11 if\cf9 \strokec9 (do_print)\cf0 \strokec4 :\cb1 \
+\cb3         \cf6 \strokec6 print\cf0 \strokec4 (\cf13 \strokec13 "\cf12 \strokec12 Results DataFrame:\cf13 \strokec13 "\cf0 \strokec4 )\cb1 \
+\cb3         \cf6 \strokec6 print\cf0 \strokec4 (\cf9 \strokec9 results_df\cf0 \strokec4 .\cf6 \strokec6 head\cf0 \strokec4 ())\cb1 \
+\cb3         \cf6 \strokec6 print\cf0 \strokec4 (\cf5 \strokec5 f\cf12 \strokec12 "Min slope_abs value: \cf5 \strokec5 \{\cf9 \strokec9 mymin\cf5 \strokec5 \}\cf12 \strokec12 "\cf0 \strokec4 )\cb1 \
+\
+\cb3         \cf2 \strokec2 # Get the row with the smallest values of 'slope_abs'\cf0 \cb1 \strokec4 \
+\cb3     \cf9 \strokec9 filtered_df\cf0 \strokec4  = \cf9 \strokec9 results_df\cf0 \strokec4 .\cf6 \strokec6 nsmallest\cf0 \strokec4 (\cf8 \strokec8 1\cf0 \strokec4 , \cf13 \strokec13 '\cf12 \strokec12 slope_abs\cf13 \strokec13 '\cf0 \strokec4 )\cb1 \
+\cb3         \cf2 \strokec2 # make sure it is above the background values\cf0 \cb1 \strokec4 \
+\cb3     \cf9 \strokec9 filtered_df\cf0 \strokec4  = \cf9 \strokec9 filtered_df\cf0 \strokec4 [\cf9 \strokec9 filtered_df\cf0 \strokec4 [\cf13 \strokec13 '\cf12 \strokec12 mean_val\cf13 \strokec13 '\cf0 \strokec4 ] \cf6 \strokec6 >=\cf0 \strokec4  \cf7 \strokec7 min_threshold\cf0 \strokec4 ]\cb1 \
+\
+\cb3     \cf11 \strokec11 if\cf9 \strokec9 (do_print)\cf0 \strokec4 :\cb1 \
+\cb3         \cf6 \strokec6 print\cf0 \strokec4 (\cf13 \strokec13 "\cf12 \strokec12 Filtered DataFrame with 5 smallest slope_abs values:\cf13 \strokec13 "\cf0 \strokec4 )\cb1 \
+\cb3         \cf6 \strokec6 print\cf0 \strokec4 (\cf9 \strokec9 filtered_df\cf0 \strokec4 )\cb1 \
+\cb3         \cf6 \strokec6 print\cf0 \strokec4 (\cf13 \strokec13 "\cf12 \strokec12 Filtered DataFrame after mean_val threshold filter:\cf13 \strokec13 "\cf0 \strokec4 )\cb1 \
+\cb3         \cf6 \strokec6 print\cf0 \strokec4 (\cf9 \strokec9 filtered_df\cf0 \strokec4 .head())\cb1 \
+\
+\
+\cb3     \cf11 \strokec11 if\cf0 \strokec4  \cf5 \strokec5 not\cf0 \strokec4  \cf9 \strokec9 filtered_df\cf0 \strokec4 .empty:\cb1 \
+\cb3         \cf9 \strokec9 min_abs_slope_mean\cf0 \strokec4  = \cf9 \strokec9 filtered_df\cf0 \strokec4 [\cf13 \strokec13 '\cf12 \strokec12 mean_val\cf13 \strokec13 '\cf0 \strokec4 ].mean() \cb1 \
+\cb3         \cf11 \strokec11 if\cf9 \strokec9 (do_print)\cf0 \strokec4 :\cb1 \
+\cb3             \cf6 \strokec6 print\cf0 \strokec4 (\cf5 \strokec5 f\cf12 \strokec12 "\cf14 \strokec14 \\n\cf12 \strokec12 Mean Value of the minimum absolute slope value row (\cf5 \strokec5 \{\cf9 \strokec9 min_abs_slope_mean\cf5 \strokec5 \}\cf12 \strokec12 ):"\cf0 \strokec4 )\cb1 \
+\cb3         \cf11 \strokec11 return\cf0 \strokec4  \cf6 \strokec6 round\cf0 \strokec4 (\cf9 \strokec9 min_abs_slope_mean\cf0 \strokec4 ,\cf8 \strokec8 1\cf0 \strokec4 )\cb1 \
+\cb3     \cb1 \
+\
+\cb3     \cf11 \strokec11 else\cf0 \strokec4 :\cb1 \
+\cb3         \cf6 \strokec6 print\cf0 \strokec4 (\cf13 \strokec13 "\cf14 \strokec14 \\n\cf12 \strokec12 Filtered DataFrame is empty.\cf13 \strokec13 "\cf0 \strokec4 )\cb1 \
+\cb3         \cf11 \strokec11 return\cf0 \strokec4  \cf8 \strokec8 0\cf0 \cb1 \strokec4 \
+\
+}
