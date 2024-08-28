@@ -1,7 +1,7 @@
 name=Mauck_MOM
 version=0.1.0
-author=Bob Mauck <mauckr@kenyon.edu>
-maintainer=Bob Mauck <mauckr@kenyon.edu>
+author=Bob Mauck
+maintainer=Bob Mauck
 sentence=Python app to handle data analysis for Mass-o-Matic 
 paragraph=
 category=Desktop App
