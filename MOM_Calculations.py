@@ -1,9 +1,10 @@
 #######################################
 #######################################
 #    MOM_Calculations.py
-#       Calibrating and calculating real weights from load cell trace data
+#       Calibrating and calculating real weights from load cell (Mass-o-Matic) trace data
 #       R.A.M and L.U.T.
 #       2024-08-27 cleanup of RAM_v10
+#       Updated 8/31/2
 #######################################
 #######################################
 
@@ -150,7 +151,7 @@ def w_mean(dat, calibration, start_index, end_index, baseline):
 #   Calculates calibrated bird weight as the mean trace value
 #   for the sub-window that has the minimum slope, 
 #   checking all sub-windows of appropriate sizes between two points
-# NOTE formerly do_slope_0
+# NOTE formerly do_slope_0, but now despends on calibration object to exist so can't to auto-find calibration values
 # Parameters:
 #   dat               - full loadcell dataframe (pandas Dataframe of form Measurement | Datetime)
 #   calibration       - initialized weight calibration object (MOM_Calculations.Calibration)
@@ -166,6 +167,8 @@ def w_mean(dat, calibration, start_index, end_index, baseline):
 #######
 def w_windowed_min_slope(dat, calibration, start_index, end_index, baseline,
                          min_window_length = 25, max_window_proportion = 0.5):
+    
+    do_print = False
     
     # Baseline comparison values
     # Starting "best" (min) slope is the slope across the whole trace segment
@@ -205,14 +208,87 @@ def w_windowed_min_slope(dat, calibration, start_index, end_index, baseline,
     calibrated_weight = (measure_mean - baseline) * calibration.regression_gradient + calibration.regression_intercept
     calibrated_slope = min_slope * calibration.regression_gradient
 
+    if(do_print):
+        print(f"---- In w_windowed... measured mean: {measure_mean} and Calibrated Weight: {calibrated_weight}")
+
     # Because this function finds an optimal window, 
     # we return not only the weight calculated from that window,
     # but also the start and end indices of the window itself 
     return calibrated_weight, calibrated_slope, best_start_index, best_end_index
 
+
+#######
+# Function w_windowed_min_slope_mid
+#   Same as w_windowed_min_slope but uses current point in loop as mid-point rather than start point for window
+#   Added for testing purposes 8/30/24 because results don't agree with previous auto results using w_windowed_min_slope
+# Parameters:
+#   dat               - full loadcell dataframe (pandas Dataframe of form Measurement | Datetime)
+#   calibration       - initialized weight calibration object (MOM_Calculations.Calibration)
+#   start_index       - start point for bird activity in the trace (int)
+#   end_index         - end point for bird activity in the trace (int)
+#   baseline          - baseline value near bird activity for calibration (float)
+#   min_window_length - the minimum window length to check slope (int)
+# Returns: 
+#   Calibrated weight in grams, unrounded (float)
+#   Calibrated slope of the chosen window with the minimum slope (float)
+#   Window start index (int)
+#   Window end index (int)
+#######
+def w_windowed_min_slope_mid(dat, calibration, start_index, end_index, baseline,
+                         min_window_length = 25, max_window_proportion = 0.5):
+    
+    # Baseline comparison values
+    # Starting "best" (min) slope is the slope across the whole trace segment
+    # Starting "best" window range is the full trace segment
+    min_slope = fit_slope(dat, start_index, end_index)
+    best_start_index = start_index
+    best_end_index = end_index
+
+    # Define the maximum window length,
+    # as user-defined proportion of full trace segment size (default 0.5)
+    # or minimum window length + 2, whichever longer
+    max_window_length = int((end_index - start_index + 1) * max_window_proportion)    
+    if max_window_length < min_window_length:
+        max_window_length = min_window_length + 2 
+
+    # CHANGE Is HERE - CENTERED WINDOWS ENTIRE LENGTH
+    # Begin searching through windows, where the start index marks the LEFT edge of the window
+    # For every start point
+    for window_start in range(start_index, end_index):
+        # For every allowed window size beginning at that start point
+        for window_size in range(min_window_length, max_window_length):
+            window_end = window_start + window_size
+
+            v_start = int(window_start - (window_size/2)) - 1
+            v_stop = int(window_start + (window_size/2))
+            
+            # Fit the slope to that window of the data
+            curr_slope = fit_slope(dat, v_start, v_stop)
+
+            # If the current slope is smaller in magnitude than the best slope, 
+            # then this is your new preferred window
+            if abs(curr_slope) <= abs(min_slope):
+                min_slope = curr_slope
+                best_start_index = v_start
+                best_end_index = v_stop
+
+    # Calculate mean value of the preferred window (min slope)
+    measure_mean = dat.loc[best_start_index:best_end_index, "Measure"].mean()
+
+    # Calibrated raw values to grams
+    calibrated_weight = (measure_mean - baseline) * calibration.regression_gradient + calibration.regression_intercept
+    calibrated_slope = min_slope * calibration.regression_gradient
+
+    # Because this function finds an optimal window, 
+    # we return not only the weight calculated from that window,
+    # but also the start and end indices of the window itself 
+    return calibrated_weight, calibrated_slope, best_start_index, best_end_index
+
+
 #######
 # Function w_median
 #   Calculates calibrated bird weight as the median trace value between two points 
+#   CHANGE 8/31 RAM: move end point forward to adjust for MFH directive (= ups and downs)
 # Parameters:
 #   dat         - full loadcell dataframe (pandas Dataframe of form Measurement | Datetime)
 #   calibration - initialized weight calibration object (MOM_Calculations.Calibration)
@@ -225,9 +301,33 @@ def w_windowed_min_slope(dat, calibration, start_index, end_index, baseline,
 #######
 def w_median(dat, calibration, start_index, end_index, baseline):
     # Get the median measurement from the trace segment
-    measure_median = dat.loc[start_index:end_index, "Measure"].median()
+    measure_median = dat.loc[start_index:(end_index+1), "Measure"].median()
     # Calibrate raw values to grams    
     calibrated_weight = (measure_median - baseline) * calibration.regression_gradient + calibration.regression_intercept
     # Get the slope of the segment and calibrate to y-axis grams
     calibrated_slope = fit_slope(dat, start_index, end_index) * calibration.regression_gradient
     return calibrated_weight, calibrated_slope
+
+
+################
+#  w_adjust_for_gravity: 
+#   Function: Adjust weight for effect of gravity after Algorithm from Afanasyev et al. 2015 - RAM 6/25/2024 with help from ChatGPT
+#   Parameters
+#       receives unadjusted weight in grams (W1)
+#       receives slope of data used to calculate W1 (adj_slope)
+#       Penguin Calculation
+#          a = slope
+#          g = 9.8
+#          W1 = Mean Value between the two points - all normal to this point
+#          W2 = W1 ( 1 + a/g)
+#    Returns
+#       value for W2 increases accuracy
+#######
+def w_adjust_for_gravity(W1, adj_slope):
+    # Define gravitational constant
+    g = 9.81
+    
+    # Calculate W2 using the adjusted slope
+    W2 = W1 * (1 + adj_slope / g)
+    
+    return W2

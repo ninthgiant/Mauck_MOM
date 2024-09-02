@@ -1,7 +1,7 @@
 #######################################
 #######################################
 #    MOM_Processing.py 
-#       Loadcell trace parsing, viewing, and processing
+#       Loadcell (Mass-o-Matic) trace parsing, viewing, and processing
 #       R.A.M and L.U.T.
 #       2024-08-27 cleanup of RAM_v10
 #######################################
@@ -37,6 +37,13 @@ PLOT_VIEWER_HEIGHT = 5
 
 #######################################
 #######################################
+# Internal Flag for printing
+#######################################
+#######################################
+do_print = False
+
+#######################################
+#######################################
 # File utilities
 #######################################
 #######################################
@@ -51,6 +58,7 @@ PLOT_VIEWER_HEIGHT = 5
 def get_user_file():
     # Can update the global input_directory to call back later
     global input_directory
+
 
     # Default filetype fire
     files_types = [('TXT',"*.txt *.TXT"), 
@@ -188,6 +196,8 @@ def output_calibration(calibration, output_frame_text):
 # Function output_weights
 #   Format CSV line for multiple weight measurement values
 #   with OPTION to write to GUI
+#   CHANGES 8/31/24:
+#       include weights adjusted for gravity from run_wts
 # NOTE rounding only happens here!
 # Parameters:
 #   f_name                 - measurement data file name (str)
@@ -208,7 +218,7 @@ def output_calibration(calibration, output_frame_text):
 def output_weights(f_name, counter, datetime, 
                    start_index, end_index, 
                    window_start_index, window_end_index,
-                   weight_mean, weight_median, weight_min_slope,
+                   weight_mean, weight_mean_gravity, weight_median, weight_min_slope, weight_min_slope_gravity,
                    slope, min_slope,
                    output_frame_text, 
                    include_header=False, write_output_to_screen=True):
@@ -220,16 +230,20 @@ def output_weights(f_name, counter, datetime,
 
     # Format data for CSV output
     # NOTE header line appended just before string here, if it's been added to output_string already
-    output_string = output_string + "\t{fname},{counter},{dtime},{samples},{samplesMinSlope},{wMean},{wMedian},{wMinSlope},{slope},{minSlope}\n".format(fname=f_name, 
+    output_string = output_string + "\t{fname},{counter},{dtime},{samples},{samplesMinSlope},{wMean},{wMeanG},{wMedian},{wMinSlope},{wMinSlopeG},{slope},{minSlope}\n".format(fname=f_name, 
                                                                                                                                                         counter=counter,
                                                                                                                                                         dtime=datetime,
                                                                                                                                                         samples=(end_index-start_index+1),
                                                                                                                                                         samplesMinSlope=(window_end_index-window_start_index+1),
                                                                                                                                                         wMean=round(weight_mean, 2),
+                                                                                                                                                        wMeanG=round(weight_mean_gravity, 2),
                                                                                                                                                         wMedian=round(weight_median,2),
                                                                                                                                                         wMinSlope=round(weight_min_slope,2),
+                                                                                                                                                        wMinSlopeG=round(weight_min_slope_gravity,2),
                                                                                                                                                         slope=round(slope,6),
                                                                                                                                                         minSlope=round(min_slope,6))
+    ### new output string to match added gravity metrics
+    
     # If requested, write to GUI screen
     if write_output_to_screen:
         # Configure the regular font to stay consistent across machines    
@@ -521,10 +535,13 @@ def run_user_calibration(dat, calibration, calibration_user_entered_values, outp
 # Function run_weights
 #   Calculate multiple weights, using whatever set of functions you'd like, given a start and end index
 #   Passes results to output_weights() to format return value string 
+#   CHANGES 8/31/2024
+#       add weight_mean_gravity which adjusts weigh_mean for gravitational effect after Afanasyev et al. 2015
+#       add weight_min_slope_gravity which adjusts that value for gravitational effect after Afanasyev et al. 2015
 # Parameters:
 #   dat                    - full dataframe (pandas Dataframe of form Measurement | Datetime)
 #   calibration            - initialized weight calibration object (MOM_Calculations.Calibration)
-#   start_index            - left index of the trace segment (int)
+#   start_index            - left index of the trace segment (int) - CHANGE 8/30/24 - start/stop index expanded in w_windowed_min_slope (RAM)
 #   end_index              - right index of the trace segment (int)
 #   baseline_mean          - baseline strain value near measurement (float)
 #   f_name                 - measurement data file name (str)
@@ -544,8 +561,10 @@ def run_weights(dat, calibration,
     
     # Call weight calculation functions
     weight_mean, slope = MOM_Calculations.w_mean(dat, calibration, start_index, end_index, baseline_mean)
+    weight_mean_gravity = MOM_Calculations.w_adjust_for_gravity(weight_mean, slope)
     weight_median, _ = MOM_Calculations.w_median(dat, calibration, start_index, end_index, baseline_mean)
-    weight_min_slope, min_slope, window_start_index, window_end_index = MOM_Calculations.w_windowed_min_slope(dat, calibration, start_index, end_index, baseline_mean)
+    weight_min_slope, min_slope, window_start_index, window_end_index = MOM_Calculations.w_windowed_min_slope(dat, calibration, start_index-10, end_index+10, baseline_mean, 25, 0.7)
+    weight_min_slope_gravity = MOM_Calculations.w_adjust_for_gravity(weight_min_slope, min_slope)
 
     # Datetime of the center of the trace segment
     datetime = dat.loc[int((start_index+end_index)/2), "Datetime"]
@@ -559,8 +578,10 @@ def run_weights(dat, calibration,
                                              window_start_index=window_start_index, 
                                              window_end_index=window_end_index, 
                                              weight_mean=weight_mean, 
+                                             weight_mean_gravity=weight_mean_gravity,
                                              weight_median=weight_median,
                                              weight_min_slope=weight_min_slope,
+                                             weight_min_slope_gravity=weight_min_slope_gravity,
                                              slope=slope,
                                              min_slope=min_slope,
                                              output_frame_text=output_frame_text,
@@ -685,29 +706,660 @@ def process_manual(calibration, calibration_user_entered_values, output_frame_te
 
 #######
 # ************************IN PROGRESS************************************
-# Function process_manual [CORE OPERATION]
+# Function process_auto[CORE OPERATION]
 #   Currently, the function starts exactly the same as process_manual.
 #   User selects a single file and conducts a manual calibration.
+#   Changes from earlier: 
 #   The program then automatically searches for windows >30g in the trace data.
 #   Finds PR peaks (second, second-to-last)
 #   Uses w_windowed_min_slope function to calculate weights between those peaks
 #   Produces a plot with those weights annotated above each window
+#   CHANGES 8/31/2024
+#       Automatically finds calibration sections with no user input - assumes standard procedure in the field
+#       Adds flag for showing plots
+#       uses run_weights to get all calculated estimates
+#       formats weight calculations and stores in a dataframe (results_df)
 # Parameters:
 #   calibration                     - weight calibration object (MOM_Calculations.Calibration)
 #   calibration_user_entered_values - tkinter text input frames to update initial calibration values (list of tkinter.Entry)
 #   output_frame_text               - tkinter output text widget frame for writing (tkinter.Text)
 # Returns: None
 #######
-def process_auto(calibration, calibration_user_entered_values, output_frame_text):
+def process_auto(calibration, calibration_user_entered_values, output_frame_text, show_graph = True):
     
     # ------------------
-    # Manual calibration
+    # Automatic calibration
     # ------------------
 
     # User selects file
     f_path = get_user_file()
 
-    # Parse data from the file
+    if(True):
+        my_output = auto_one_file(f_path, calibration, calibration_user_entered_values, output_frame_text, show_graph = True)
+        print(my_output)
+    else:
+        # Parse data from the file
+        dat = parse_trace_file(f_path)
+
+        # File parse failures will return None data; exit if that occurred
+        if dat is None:
+            return
+
+        # Extract useful file name for display / report
+        f_name = os.path.basename(f_path)
+
+        # Write the initial processing output to GUI text widget
+        output_header(dat, f_name, "AUTO PROCESSING", output_frame_text)
+
+        if(False):
+            # could check for good calibration and if not good, then ask user to do it - not for batch processing though
+            # Allow the user to calibrate - COULD PASS ARGUMENT FOR MANUAL VS. AUTO-CALIBRATION
+            #   (will check if calibration object is initialized and, if so, ask user if they want to retain)
+            calibration = run_user_calibration(dat, calibration, calibration_user_entered_values, output_frame_text)
+        else:
+            calibration = run_auto_calibration(dat, calibration, calibration_user_entered_values, output_frame_text)
+        if calibration is None or not calibration.initialized:
+            return
+
+        # Output calibration info to GUI
+        output_calibration(calibration, output_frame_text)
+
+        # ------------------
+        # Automatic measurements from single file
+        # ------------------
+
+        # Get the 30g threshold 
+        threshold_30 = (30 - calibration.regression_intercept) / calibration.regression_gradient + calibration.baseline
+
+        # Threshold the data
+        # Values >30g become 1
+        # Values <=30g become 0 
+        threshed = (dat.loc[:, "Measure"] > threshold_30).astype(int)
+
+        # Open small blips of 0s (<10 samples long)
+        # This merges windows that are close to one another
+        # For example: --_-------- becomes --------------
+
+        # A string of 0s starts when the value is 0, and the previous (shifted 1) value is 1 
+        zero_starts = (threshed == 0) & (threshed.shift(1) == 1)
+        # A string of 0s ends when the value is 0, and the next (shifted -1) value is 1
+        zero_ends = (threshed == 0) & (threshed.shift(-1) == 1)
+
+        # Get the integer indices associated with those starts and ends
+        zero_start_indices = zero_starts[zero_starts].index
+        zero_end_indices = zero_ends[zero_ends].index
+
+        # Cut any "ends" that are actually 0s->1s at the beginning of the file
+        # As a result, the starts and ends are now aligned to mark a single window of 0s
+        zero_end_indices = zero_end_indices[zero_end_indices > zero_start_indices.min()]
+        
+        # Go through every pair of start-end values (this marks the edges of a window of 0s) 
+        for start, end in zip(zero_start_indices, zero_end_indices):
+            # if the size of that window of 0s is <10 samples long
+            # mark those values as 1s, instead of 0s
+            if end - start + 1 < 10 :
+                threshed.iloc[start:(end+1)] = 1
+
+        # Now find the windows of 1s
+        # These are values registered at >30g
+
+        # A string of 1s starts when the value is 1, and the previous (shifted 1) value is 0
+        window_starts = (threshed == 1) & (threshed.shift(1) == 0)
+        # A string of 1s ends when the value is 1, and the next (shifted -1) value is 0
+        window_ends = (threshed == 1) & (threshed.shift(-1) == 0)
+
+        # Extend the window by one in each direction to get the left and the rightmost peaks included in the window
+        # Needed when searching for 2nd peaks for penguin rule
+        window_starts_indices = window_starts[window_starts].index - 1
+        window_end_indices = window_ends[window_ends].index + 1
+
+        # Cut any "ends" that are actually 1s->0s at the beginning of the file
+        # As a result, the starts and ends are now aligned to mark a single window of 1s
+        window_end_indices = window_end_indices[window_end_indices > window_starts_indices.min()]
+
+        # Close small blips of 1s (<25 samples long)
+        # This erases measurement windows that are very short
+        # For example: __-______ becomes _________
+
+        # Make a new list of the open windows to retain
+        # (this allows us to retain the original windows if needed, unlike when closed down the blips of 0s)
+        retained_window_starts_indices = []
+        retained_window_ends_indices = []
+
+        # Go through every pair of start-end values (this marks the edges of a window of 1s) 
+        for start, end in zip(window_starts_indices, window_end_indices):
+            # if the size of that window of 1s is <25 samples long
+            if end - start + 1 > 25:
+                # mark those values as 0s, instead of 1s
+                retained_window_starts_indices.append(start)
+                retained_window_ends_indices.append(end)
+
+        # Lists to keep track of selected peak locations 
+        # and corresponding measurements between those peaks
+        peak_markers_x = []
+        peak_markers_y = []
+        measure_centers_x = []
+        measure_centers_y = []
+        measures = []
+
+        # List to keep track of full output for every trace in the file
+        formatted_output = []
+
+        # as in manual multiple birds, this does all the traces in the file, so count them
+        trace_counter = 1
+
+        # For each measurement window of 1s, find the peaks and measure within those peaks
+        for start, end in zip(retained_window_starts_indices, retained_window_ends_indices):
+            # Get the measurement data in the window
+            window = dat.loc[start:end, "Measure"]
+            
+            # Get the sign switches at every location in the trace
+            # Start by calculating the rolling difference, like the first derivative: window.diff()
+            #   series [a, b, c] becomes series[NA, b-a, c-b]
+            # Simplify to the sign of the first derivative: np.sign(window.diff())
+            #   increasing = 1, decreasing = -1
+            # Now get the derivative of those signs: np.sign(window.diff()).diff()
+            #   inc->inc =  1 -  1 =  0
+            #   dec->dec = -1 - -1 =  0 
+            #   inc->dec = -1 -  1 = -2
+            #   dec->inc =  1 - -1 =  2
+            # Fill the NA values with 0 
+            # (will be the first values in the Series, because there are no previous values to take differences from with .diff)
+            sign_switches = np.sign(window.diff()).diff().fillna(0)
+
+            # The PEAKS are areas where the trace is going from increasing to decreasing
+            # so find indices in the original trace where the sign_switch is -2
+            # Shift one index to the left to adjust for .diff()
+            peaks = sign_switches[sign_switches == -2].index - 1
+
+            # Now we are finding the actual measurement window via penguin rule
+            # By default, start with the actual starta nd end value of the window
+            start_peak_index = start
+            end_peak_index = end
+
+            # If there are 3 or more peaks, take the penguin rule peaks
+            if len(peaks) > 2:
+                # Second peak
+                start_peak_index = peaks[1]
+                # Second-to-last peak
+                end_peak_index = peaks[-2]
+
+            # Find central value of the window
+            measure_center = int((start_peak_index + end_peak_index) / 2)
+
+            # CHANGE 8/30/24 - GET the LOCAL BASELINE VALUE HERE
+            local_baseline, good_flag = get_bird_baseline(dat, start_peak_index, end_peak_index, buffer_size=800, window_size=40)
+
+            # Find the weight within the window
+            # NOTE you could call run_weights() here, like in process_manual
+            #      For doing a batch of files, you could call run_weights() and store the csv-formatted output strings
+            # measure, _, _, _ = MOM_Calculations.w_windowed_min_slope_mid(dat, calibration, start_peak_index, end_peak_index, local_baseline)
+            # measure, _, _, _ = MOM_Calculations.w_windowed_min_slope(dat, calibration, start_peak_index, end_peak_index, local_baseline)
+
+            wt_info = run_weights(dat, calibration, start_peak_index, end_peak_index, local_baseline, f_name, trace_counter, output_frame_text, include_header=False, write_output_to_screen=False)
+            values = wt_info.split(',')
+
+            # get the 11th value to put toward the graphing
+            if len(values) >= 11:
+                weight_min_slope_value = values[10].strip()
+                measure = float(weight_min_slope_value)  # Convert to float
+            else:
+                measure = 0
+
+            # add the weight info to the output to be saved
+            # Append the formatted string to the list
+            formatted_output.append(wt_info)
+
+            # increment the trace
+            trace_counter = trace_counter + 1
+
+            if (show_graph):
+                # This is all for plotting
+                peak_markers_x.append(start_peak_index)
+                peak_markers_x.append(end_peak_index)
+                peak_markers_y.append(dat.loc[start_peak_index, "Measure"])
+                peak_markers_y.append(dat.loc[end_peak_index, "Measure"])
+                measure_centers_x.append(measure_center)
+                measure_centers_y.append(dat.loc[measure_center, "Measure"])
+                measure = 0
+                measures.append(round(measure, 2))
+        
+        if (show_graph):
+            # ------------------
+            # This is all just plotting
+            # ------------------
+            peak_markers = pd.DataFrame({"x":peak_markers_x,
+                                        "y":peak_markers_y})
+            measure_labels = pd.DataFrame({"x":measure_centers_x,
+                                        "y":measure_centers_y,
+                                        "label":[str(x) for x in measures]})
+            
+            plt.ion()
+            fig, (ax1, ax2) = plt.subplots(nrows=2, sharex=True)
+            fig.set_size_inches((15,4))  # (default_figure_width, default_figure_height)) 
+            ax1.plot(dat.loc[:, "Measure"])
+            ax1.scatter(peak_markers["x"].astype(float), peak_markers["y"].astype(float), color="red")
+            for i in range(len(measure_labels)):
+                ax1.text(measure_labels["x"].astype(float).iloc[i], 
+                        measure_labels["y"].astype(float).iloc[i], 
+                        measure_labels["label"].iloc[i], 
+                        color="red", horizontalalignment="center")
+
+            # Currently just show plot the user and exit
+            ax2.plot(threshed, "r")
+
+        return formatted_output
+
+
+#######
+# Function run_auto_calibration
+#   Perform auto calibration with no user input
+# NOTE this will return an UNINITIALIZED calibration object if the user input failed!
+#      you have to check for this outside the function
+# Parameters:
+#   dat                             - full dataframe (pandas Dataframe of form Measurement | Datetime)
+#   calibration                     - weight calibration object (MOM_Calculations.Calibration)
+#   calibration_user_entered_values - tkinter text input frames to update initial calibration values (list of tkinter.Entry)
+#   output_frame_text               - tkinter output text widget frame for writing (tkinter.Text)
+# Returns:
+#   calibration object, uninitialized or initialized (MOM_Calculations.Calibration) or None, if user calibration failed 
+#######
+def run_auto_calibration(dat, calibration, calibration_user_entered_values, output_frame_text):
+    # If the calibration has not been initialized OR the user declines the opportunity to use the previous one, take it
+    # NOTE python short-circuits the OR operator, so if the calibration has not been initialized, we will automatically take the calibration
+    if not calibration.initialized or not messagebox.askyesno("Confirmation", "Use previous calibration?"):
+        # Set manual calibration values from entry frames
+        # checking to see that the values are well-formed floats (not e.g., text)
+        if not calibration.set_true(*[entry.get() for entry in calibration_user_entered_values]):
+            output_error("ERROR invalid calibration input value", output_frame_text)
+            # We return without an initialized calibration object if this failed
+            return
+
+        # Conduct calibrations
+        calibration_true_values = calibration.get_true()
+
+        baseline_cal_mean, cal1_mean, cal2_mean, cal3_mean = get_auto_calibration_values(dat, baseline_fraction=0.0003, num_sections=10, window_size=75, std_threshold=200, tolerance=5000, lines = 5000)
+
+
+        # Conduct calibration regression (results stored in object)
+        # Now calibration.initialized is True
+        calibration.regression(baseline_cal_mean, cal1_mean, cal2_mean, cal3_mean)
+        
+        # Show the user the regression
+        # First, extracting the calibration values from the stored object
+        calibration_difference_values = calibration.get_difference()
+        calibration_regressed_values = [x * calibration.regression_gradient + calibration.regression_intercept for x in calibration_difference_values]
+
+        if(True):
+            # Second, plotting the calibrations for user confirmation 
+            _, ax = plt.subplots()
+            ax.plot(calibration_difference_values, calibration_true_values, marker="o", color="black", linestyle="None")
+            ax.plot(calibration_difference_values, calibration_regressed_values, color="gray", linestyle="dashed")
+            plt.xlabel("Measured value (strain difference from baseline)")
+            plt.ylabel("True value (g)")
+            plt.title("Calibration regression\n(R^2={r}, Inter={i}, Slope={s})".format(r=round(calibration.regression_rsquared,5), 
+                                                                                    s=round(calibration.regression_gradient,5),
+                                                                                    i=round(calibration.regression_intercept,5)))
+            plt.show()
+
+    return calibration
+
+
+############################
+#
+#   get_auto_calibration_values
+#       RAM, Aug 21, 2024
+#
+#    Detect sections in the first 5000 lines where values rise above and fall back to the baseline value.
+#    can Plot the data with vertical lines at start and stop points of detected sections.
+#
+#    Parameters:
+#    - dataframe: pd.DataFrame with a 'Measure' column
+#    - baseline_fraction: Fraction of the baseline to determine thresholds wihtout user help (default is 0.0002)
+#    - num_sections: Number of sections to detect (default is 10) - get more than you need to be sure we get first 3
+#    - window_size: Minimum number of points/lines for detected section (default is 75) - default may cause some not to work
+#    - std_threshold: Standard deviation threshold for baseline calculation (default is 200) - should be 150 for baseline
+#    - tolerance: Tolerance for deviation from baseline mean (default is 5000) - not sure this is right
+#    - lines - how much of the file to consider. Defaults to 5000 for detecting the calibration weights
+#    
+#    Returns:
+#    - A tuple with the baseline value and a DataFrame with columns 'Section', 'Start', and 'Stop' indicating the detected sections
+#   
+##############
+def get_auto_calibration_values(dataframe, baseline_fraction=0.0003, num_sections=10, window_size=75, std_threshold=200, tolerance=5000, lines = 5000):
+ 
+    # Slice the first 5000 lines - make this a parameter - 5000 ONLY FOR Calibration does this work!
+    if(lines > 0):
+        subset_data = dataframe.head(5000)
+    else:
+        subset_data = dataframe
+    
+    # Calculate rolling mean and standard deviation
+    rolling_mean = subset_data['Measure'].rolling(window=window_size).mean()
+    rolling_std = subset_data['Measure'].rolling(window=window_size).std()
+    
+    # Drop NaN values created by the rolling window
+    rolling_mean = rolling_mean.dropna()
+    rolling_std = rolling_std.dropna()
+    
+    # Combine the results into a DataFrame for easier analysis
+    results = pd.DataFrame({
+        'Mean': rolling_mean,
+        'Std': rolling_std
+    })
+
+    if do_print:
+        print(f"Length of results dataframe: {len(results)}")
+    filtered_results = results[results['Std'] < std_threshold]
+    if(len(filtered_results)> 0):
+        results = results[results['Std'] < std_threshold]
+        if do_print:
+            print(f"Throw out all with STD > {std_threshold}")
+            print(f"Length of results now: {len(results)}: must redo indices")
+        results = results.reset_index(drop=True)
+        
+    else:
+        if do_print: print("keeping messy data to find min")
+      
+    # Find the index of the row with the lowest mean and lowest variation
+    min_mean_index = results['Mean'].idxmin()
+    min_std_index = results['Std'].idxmin()
+
+    # Check which index satisfies both conditions - use lowest variation if have to choose
+    baseline_index = min_mean_index if min_std_index == min_mean_index else results['Std'].idxmin()
+    
+    # Extract the baseline window
+    baseline_cal_mean= results.iloc[baseline_index]['Mean']
+
+    # Define thresholds based on baseline fraction so dont' need user to tell us what is off baseline
+    high_threshold = baseline_cal_mean + baseline_fraction * baseline_cal_mean
+    low_threshold = baseline_cal_mean + (baseline_fraction*.8) * baseline_cal_mean  ### for dropping below it
+    if do_print:
+        print(f"Using baseline mean {baseline_cal_mean} from df at index: {baseline_index}")
+        print(f"Hi/Low thresholds: {high_threshold} / {low_threshold}")
+
+    # Initialize detection variables
+    in_section = False
+    start_idx = None
+    detected_sections = []
+    
+    # Step through the data to detect rises and falls
+    for i in range(len(subset_data)):
+        value = subset_data['Measure'].iloc[i]
+        
+        if value > high_threshold and not in_section:
+            # Start of a new section
+            start_idx = i
+            in_section = True
+        elif value < high_threshold and in_section:  ## CHANGE from low threshold
+            # End of the current section
+            stop_idx = i
+            if (stop_idx - start_idx) > window_size:  # Check window size condition
+                detected_sections.append((start_idx, stop_idx))
+            in_section = False
+            
+            # Stop if we've detected the required number of sections
+            if len(detected_sections) >= num_sections:
+                break
+    
+    if do_print: print(f"size of detected sections : {len(detected_sections)}")
+
+    # Create a DataFrame to store the section start and stop indices
+    sections_df = pd.DataFrame(detected_sections, columns=['Start', 'Stop'])
+    sections_df.index.name = 'Section'
+    sections_df.index += 1  # Start numbering from 1
+
+    # Todo: check to see if we have detected enough sections (3) - or don't go forward
+    if(len(sections_df)<3):
+        # we have a problem
+        cal1_mean = sections_df['Mean'].iloc[0] if len(sections_df) > 0 else 0
+        cal2_mean = sections_df['Mean'].iloc[1] if len(sections_df) > 1 else 0
+        cal3_mean = sections_df['Mean'].iloc[2] if len(sections_df) > 2 else 0 
+    else:
+        # Put another column into section_df with the mean values there with find_calibration_flats(measure_series, start_pt, stop_pt, min_len, min_threshold, max_pct=0.5):
+        for i, row in sections_df.iterrows():      
+            start_pt = row['Start']
+            stop_pt = row['Stop']
+            sections_df.at[i, 'Mean'], _, _, _,  = section_mean, section_slope, section_start, section_len = find_calibration_flats(dataframe, start_pt, stop_pt, 60, high_threshold, 0.7)
+
+        cal1_mean = sections_df['Mean'].iloc[0] if len(sections_df) > 0 else None
+        cal2_mean = sections_df['Mean'].iloc[1] if len(sections_df) > 1 else None
+        cal3_mean = sections_df['Mean'].iloc[2] if len(sections_df) > 2 else None  
+
+        if do_print:
+            print("Detected Sections:")
+            print(sections_df)  
+
+        if do_print:
+            # Plot the raw data with vertical lines for start and stop points
+            plt.figure(figsize=(12, 6))
+            plt.plot(subset_data['Measure'], label='Raw Data')
+            
+            for _, row in sections_df.iterrows():
+                plt.axvline(x=row['Start'], color='r', linestyle='--', label=f'Start {row.name}')
+                plt.axvline(x=row['Stop'], color='g', linestyle='--', label=f'Stop {row.name}')
+            
+            plt.xlabel('Index')
+            plt.ylabel('Measure')
+            plt.title('Raw Data with Detected Sections')
+            plt.legend()
+            plt.show()
+
+    return baseline_cal_mean, cal1_mean, cal2_mean, cal3_mean
+
+#############################
+# Function get_bird_baseline: does automatic (no user input) ID of baseline value for a bird trace
+#   RAM 8/21/24
+#
+#   looks before and after the passed point in a dataframe to find the lowest stable value to used as local baseline
+#
+#   parameters
+#       dataframe with the traces
+#       start and stop locations of the trace
+#       buffer size is how far before and after trace we look for a good baseline - 60 SPS guides you
+#       window size - how many points need to be level for us to use this as a baseline   
+#   returns: Mean baseline value, all_good a flag to say that min mean and min std weren't the same
+#######
+def get_bird_baseline(my_bird_df, start_index, stop_index, buffer_size=800, window_size=40):
+
+        # Define new indices before and after the focal trace by adding/subtracting the buffer
+    new_start_index = start_index - buffer_size
+    new_stop_index = stop_index + buffer_size
+
+    # Create subsets before and after the specified indices
+    subset_before = my_bird_df.iloc[new_start_index:start_index]
+    subset_after = my_bird_df.iloc[stop_index:new_stop_index]
+
+    # Calculate rolling mean and standard deviation for the 'before' subset
+    rolling_mean_before = subset_before['Measure'].rolling(window=window_size).mean().dropna()
+    rolling_std_before = subset_before['Measure'].rolling(window=window_size).std().dropna()
+
+    # Calculate rolling mean and standard deviation for the 'after' subset
+    rolling_mean_after = subset_after['Measure'].rolling(window=window_size).mean().dropna()
+    rolling_std_after = subset_after['Measure'].rolling(window=window_size).std().dropna()
+
+    # Create DataFrames for before and after results
+    results_bird_cal_before = pd.DataFrame({
+        'Mean_Before': rolling_mean_before,
+        'Std_Before': rolling_std_before
+    })
+
+    results_bird_cal_after = pd.DataFrame({
+        'Mean_After': rolling_mean_after,
+        'Std_After': rolling_std_after
+    })
+
+    # combine them since all we care is for the lowest value between the 2
+    rolling_mean_combined = pd.concat([rolling_mean_before, rolling_mean_after], ignore_index=True)
+    rolling_std_combined = pd.concat([rolling_std_before, rolling_std_after], ignore_index=True)
+
+    # Create a DataFrame with combined rolling mean and std values
+    results_bird_cal_combined = pd.DataFrame({
+        'Mean': rolling_mean_combined,
+        'Std': rolling_std_combined
+    })
+
+    # what are our values
+    min_mean_index = results_bird_cal_combined['Mean'].idxmin()
+    min_std_index = results_bird_cal_combined['Std'].idxmin()
+
+    mean_value_at_minSTD = results_bird_cal_combined['Mean'].iloc[min_std_index]
+    std_value_at_minSTD = results_bird_cal_combined['Std'].iloc[min_std_index]
+
+    mean_value_at_minMean = results_bird_cal_combined['Mean'].iloc[min_mean_index]
+    std_value_at_minMean = results_bird_cal_combined['Std'].iloc[min_mean_index]
+
+    local_baseline = mean_value_at_minSTD
+
+    #  we  pass a flag saying they weren't the same, or change it somehow, but not now just pass the flag
+    if(min_mean_index != min_std_index):
+        all_good = False
+    else:
+        all_good = True
+
+    if do_print:
+        print(f"Mean at mean_min index: {min_mean_index} is: {mean_value_at_minMean}, STD: {round(std_value_at_minMean,1)}")
+        print(f"Mean at mean_std index: {min_std_index} is: {mean_value_at_minSTD}, STD: {round(std_value_at_minSTD,1)}")
+        print(f"------- Return value: {mean_value_at_minSTD}")
+
+    return(local_baseline, all_good)
+
+##############
+#    find_calibration_flats - RAM 7/23/2024
+#    Function to ID calibration weights - was do_Slope_0
+#       now only used when finding baseline and calibration weights without user input
+#    Parameters:
+#    - measure_series: DataFrame  containing the measure data. Get the the whole dataframe, so you can go oustide bounds
+#       - of the window of interst of your f\jull slope measures
+#    - start_pt: Starting point (long integer). where to start and end the window counting
+#    - stop_pt: Ending point (long integer).  could just be the lenght of the slice we are sending it when using real data
+#    - min_len: Minimum length of windows (long integer). We have data that could determine the right number for this
+#    - min_threshold: Minimum threshold for the intercept value (real number).
+#    - max_pct: Max proportion of the passed series to be used to determine the max length of windows (real number, default is 0.5).
+# 
+#   Returns:
+#    - Mean Value for calculation of mass AND starting point and width of window used
+#########
+def find_calibration_flats(measure_series, start_pt, stop_pt, min_len, min_threshold, max_pct=0.5):
+
+    max_len = int((stop_pt - start_pt) * max_pct)
+    if(max_len <= min_len):
+        max_len = min_len + 2 # (stop_pt - start_pt)
+    total_windows = max_len - min_len
+    trace_len = stop_pt - start_pt - 1
+
+    if(do_print):
+        print(f"max_len: {max_len}")
+        print(f"total_windows: {total_windows}")
+        print(f"trace_len: {trace_len}")
+
+    if total_windows <= 0:
+        raise ValueError("total_windows must be greater than 0")
+
+    rows = []
+
+    for i in range(start_pt, stop_pt):
+        for w in range(min_len, max_len):
+            v_start = int(i - (w/2)) - 1
+            v_stop = int(i + (w/2))
+
+            if (w % 2 != 0):
+                v_start = v_start - 1
+
+            new_series = measure_series.iloc[v_start:v_stop]
+            if(do_print):
+                print(f"\nnew_series (i={i}, w={w}):\n{new_series}")
+
+            if len(new_series) < 2:
+                continue
+
+            x_values = np.arange(len(new_series))
+            slope, intercept = np.polyfit(x_values, new_series['Measure'], 1)
+            mean_val = new_series['Measure'].mean()
+
+            if(do_print):
+                print(f"x_values: {x_values}")
+                print(f"slope: {slope}")
+                print(f"intercept: {intercept}")
+                print(f"mean_val: {mean_val}")
+
+            wt_calc = np.random.uniform(0, 100)
+
+            row_data = {
+                'slope': slope,
+                'intercept': intercept,
+                'wt_calc': wt_calc,
+                'center_pt': i,
+                'total_len': w,
+                'v_start': v_start,
+                'v_stop': v_stop,
+                'mean_val': mean_val
+            }
+
+            rows.append(row_data)
+
+    results_df = pd.DataFrame(rows, columns=['slope', 'intercept', 'wt_calc', 'center_pt', 'total_len', 'v_start', 'v_stop', 'mean_val'])
+    results_df['slope_abs'] = abs(results_df['slope'])
+
+    mymin = results_df['slope_abs'].min()
+
+    if(do_print):
+        print("Results DataFrame:")
+        print(results_df.head())
+        print(f"Min slope_abs value: {mymin}")
+
+        # Get the row with the smallest values of 'slope_abs'
+    filtered_df = results_df.nsmallest(1, 'slope_abs')
+        # make sure it is above the background values
+    filtered_df = filtered_df[filtered_df['mean_val'] >= min_threshold]
+
+    if(do_print):
+        print("Filtered DataFrame with 5 smallest slope_abs values:")
+        print(filtered_df)
+        print("Filtered DataFrame after mean_val threshold filter:")
+        print(filtered_df.head())
+
+
+    if not filtered_df.empty:
+        min_abs_slope_mean = filtered_df['mean_val'].mean() 
+        # Find the index of the row with the minimum 'slope_abs'
+        min_slope_abs_index = results_df['slope_abs'].idxmin()
+
+        # Retrieve the values of 'v_start' and 'total_len' for that row
+        min_row = filtered_df.loc[min_slope_abs_index]
+        v_start = min_row['v_start']
+        total_len = min_row['total_len']
+        min_slope = results_df['slope'].iloc[min_slope_abs_index]
+        if(do_print):
+            print(f"\nMean Value of the minimum absolute slope value row ({min_abs_slope_mean}):")
+        return round(min_abs_slope_mean,1), min_slope, v_start, total_len
+    
+
+    else: # CLEAN this- flag a bad calibration
+        # mb.showinfo("Cannot auto-calibrate. R2 = ", str(cal_r_squared) + ". NOT GOOD.")
+        print("\nFiltered DataFrame is empty.")
+        return 0, 999, 0, 0
+
+##############
+#    auto_one_file - RAM 9/1/2024
+#       a subset of original fuction: process_auto(calibration, calibration_user_entered_values, output_frame_text, show_graph = True):
+#    Function to do all the automatic calculations on a single file
+#       now only used when finding baseline and calibration weights without user input
+#    Parameters:
+#    - f_path - the location of the file to be processed 
+#       - of the window of interst of your f\jull slope measures
+#    - start_pt: Starting point (long integer). where to start and end the window counting
+#    - stop_pt: Ending point (long integer).  could just be the lenght of the slice we are sending it when using real data
+#    - min_len: Minimum length of windows (long integer). We have data that could determine the right number for this
+#    - min_threshold: Minimum threshold for the intercept value (real number).
+#    - max_pct: Max proportion of the passed series to be used to determine the max length of windows (real number, default is 0.5).
+# 
+#   Returns:
+#    - Mean Value for calculation of mass AND starting point and width of window used
+#########
+def auto_one_file(f_path, calibration, calibration_user_entered_values, output_frame_text, show_graph = True):
+
+      # Parse data from the file
     dat = parse_trace_file(f_path)
 
     # File parse failures will return None data; exit if that occurred
@@ -720,9 +1372,13 @@ def process_auto(calibration, calibration_user_entered_values, output_frame_text
     # Write the initial processing output to GUI text widget
     output_header(dat, f_name, "AUTO PROCESSING", output_frame_text)
 
-    # Allow the user to calibrate
-    #   (will check if calibration object is initialized and, if so, ask user if they want to retain)
-    calibration = run_user_calibration(dat, calibration, calibration_user_entered_values, output_frame_text)
+    if(False):
+        # could check for good calibration and if not good, then ask user to do it - not for batch processing though
+        # Allow the user to calibrate - COULD PASS ARGUMENT FOR MANUAL VS. AUTO-CALIBRATION
+        #   (will check if calibration object is initialized and, if so, ask user if they want to retain)
+        calibration = run_user_calibration(dat, calibration, calibration_user_entered_values, output_frame_text)
+    else:
+        calibration = run_auto_calibration(dat, calibration, calibration_user_entered_values, output_frame_text)
     if calibration is None or not calibration.initialized:
         return
 
@@ -733,7 +1389,7 @@ def process_auto(calibration, calibration_user_entered_values, output_frame_text
     # Automatic measurements from single file
     # ------------------
 
-    # Get the 30g threshold
+    # Get the 30g threshold 
     threshold_30 = (30 - calibration.regression_intercept) / calibration.regression_gradient + calibration.baseline
 
     # Threshold the data
@@ -807,6 +1463,12 @@ def process_auto(calibration, calibration_user_entered_values, output_frame_text
     measure_centers_y = []
     measures = []
 
+    # List to keep track of full output for every trace in the file
+    formatted_output = []
+
+    # as in manual multiple birds, this does all the traces in the file, so count them
+    trace_counter = 1
+
     # For each measurement window of 1s, find the peaks and measure within those peaks
     for start, end in zip(retained_window_starts_indices, retained_window_ends_indices):
         # Get the measurement data in the window
@@ -846,39 +1508,65 @@ def process_auto(calibration, calibration_user_entered_values, output_frame_text
         # Find central value of the window
         measure_center = int((start_peak_index + end_peak_index) / 2)
 
+        # CHANGE 8/30/24 - GET the LOCAL BASELINE VALUE HERE
+        local_baseline, good_flag = get_bird_baseline(dat, start_peak_index, end_peak_index, buffer_size=800, window_size=40)
+
         # Find the weight within the window
         # NOTE you could call run_weights() here, like in process_manual
         #      For doing a batch of files, you could call run_weights() and store the csv-formatted output strings
-        measure, _, _, _ = MOM_Calculations.w_windowed_min_slope(dat, calibration, start_peak_index, end_peak_index, calibration.baseline)
+        # measure, _, _, _ = MOM_Calculations.w_windowed_min_slope_mid(dat, calibration, start_peak_index, end_peak_index, local_baseline)
+        # measure, _, _, _ = MOM_Calculations.w_windowed_min_slope(dat, calibration, start_peak_index, end_peak_index, local_baseline)
 
-        # This is all for plotting
-        peak_markers_x.append(start_peak_index)
-        peak_markers_x.append(end_peak_index)
-        peak_markers_y.append(dat.loc[start_peak_index, "Measure"])
-        peak_markers_y.append(dat.loc[end_peak_index, "Measure"])
-        measure_centers_x.append(measure_center)
-        measure_centers_y.append(dat.loc[measure_center, "Measure"])
-        measures.append(round(measure, 2))
-    
-    # ------------------
-    # This is all just plotting
-    # ------------------
-    peak_markers = pd.DataFrame({"x":peak_markers_x,
-                                 "y":peak_markers_y})
-    measure_labels = pd.DataFrame({"x":measure_centers_x,
-                                   "y":measure_centers_y,
-                                   "label":[str(x) for x in measures]})
-    
-    plt.ion()
-    fig, (ax1, ax2) = plt.subplots(nrows=2, sharex=True)
-    fig.set_size_inches((15,4))  # (default_figure_width, default_figure_height)) 
-    ax1.plot(dat.loc[:, "Measure"])
-    ax1.scatter(peak_markers["x"].astype(float), peak_markers["y"].astype(float), color="red")
-    for i in range(len(measure_labels)):
-        ax1.text(measure_labels["x"].astype(float).iloc[i], 
-                 measure_labels["y"].astype(float).iloc[i], 
-                 measure_labels["label"].iloc[i], 
-                 color="red", horizontalalignment="center")
+        wt_info = run_weights(dat, calibration, start_peak_index, end_peak_index, local_baseline, f_name, trace_counter, output_frame_text, include_header=False, write_output_to_screen=False)
+        values = wt_info.split(',')
 
-    # Currently just show plot the user and exit
-    ax2.plot(threshed, "r")
+        # get the 11th value to put toward the graphing
+        if len(values) >= 11:
+            weight_min_slope_value = values[10].strip()
+            measure = float(weight_min_slope_value)  # Convert to float
+        else:
+            measure = 0
+
+        # add the weight info to the output to be saved
+        # Append the formatted string to the list
+        formatted_output.append(wt_info)
+
+        # increment the trace
+        trace_counter = trace_counter + 1
+
+        if (show_graph):
+            # This is all for plotting
+            peak_markers_x.append(start_peak_index)
+            peak_markers_x.append(end_peak_index)
+            peak_markers_y.append(dat.loc[start_peak_index, "Measure"])
+            peak_markers_y.append(dat.loc[end_peak_index, "Measure"])
+            measure_centers_x.append(measure_center)
+            measure_centers_y.append(dat.loc[measure_center, "Measure"])
+            measure = 0
+            measures.append(round(measure, 2))
+    
+    if (show_graph):
+        # ------------------
+        # This is all just plotting
+        # ------------------
+        peak_markers = pd.DataFrame({"x":peak_markers_x,
+                                    "y":peak_markers_y})
+        measure_labels = pd.DataFrame({"x":measure_centers_x,
+                                    "y":measure_centers_y,
+                                    "label":[str(x) for x in measures]})
+        
+        plt.ion()
+        fig, (ax1, ax2) = plt.subplots(nrows=2, sharex=True)
+        fig.set_size_inches((15,4))  # (default_figure_width, default_figure_height)) 
+        ax1.plot(dat.loc[:, "Measure"])
+        ax1.scatter(peak_markers["x"].astype(float), peak_markers["y"].astype(float), color="red")
+        for i in range(len(measure_labels)):
+            ax1.text(measure_labels["x"].astype(float).iloc[i], 
+                    measure_labels["y"].astype(float).iloc[i], 
+                    measure_labels["label"].iloc[i], 
+                    color="red", horizontalalignment="center")
+
+        # Currently just show plot the user and exit
+        ax2.plot(threshed, "r")
+
+    return formatted_output
