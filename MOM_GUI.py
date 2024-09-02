@@ -4,6 +4,8 @@
 #       GUI elements and execution 
 #       R.A.M and L.U.T.
 #       2024-08-27 cleanup of RAM_v10
+#       CHANGES: 9/1/2024
+#           Add button for batch auto processing
 #######################################
 #######################################
 
@@ -40,7 +42,7 @@ INPUT_PAD_Y = 20
 BUTTON_PAD_X = 5
 BUTTON_PAD_Y = 5
 BUTTON_WIDTH = 20
-BUTTON_LABELS = ["View", "Manual", "Automatic"]
+BUTTON_LABELS = ["View", "Manual", "Automatic", "Auto Batch"]
 
 # Output frames
 OUTPUT_FRAME_WIDTH = 400
@@ -98,6 +100,11 @@ buttons.append(button_manual)
 
 # Auto button calls MOM_Processing.process_auto()
 button_auto = tk.Button(button_frame, text = BUTTON_LABELS[2], command=lambda:MOM_Processing.process_auto(calibration, calibration_user_entered_values, output_frame_text))  
+button_auto.pack(side=tk.LEFT, padx=BUTTON_PAD_X, pady=BUTTON_PAD_Y)
+buttons.append(button_auto)
+
+# Auto button calls MOM_Processing.process_auto_batch()
+button_auto = tk.Button(button_frame, text = BUTTON_LABELS[3], command=lambda:MOM_Processing.process_auto_batch(calibration, calibration_user_entered_values, output_frame_text))  
 button_auto.pack(side=tk.LEFT, padx=BUTTON_PAD_X, pady=BUTTON_PAD_Y)
 buttons.append(button_auto)
 

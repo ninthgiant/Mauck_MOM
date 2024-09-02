@@ -557,7 +557,7 @@ def run_weights(dat, calibration,
                 baseline_mean, 
                 f_name, counter, 
                 output_frame_text, 
-                include_header=False, write_output_to_screen=False):
+                include_header=False, write_output_to_screen=True):
     
     # Call weight calculation functions
     weight_mean, slope = MOM_Calculations.w_mean(dat, calibration, start_index, end_index, baseline_mean)
@@ -736,219 +736,96 @@ def process_auto(calibration, calibration_user_entered_values, output_frame_text
 
     if(True):
         my_output = auto_one_file(f_path, calibration, calibration_user_entered_values, output_frame_text, show_graph = True)
-        print(my_output)
+
+
+
+
+#######
+# ************************************************************
+# Function process_auto_batch [CORE OPERATION]
+#   - Runs automated processing of multiple files
+#   - User chooses a folder containing all the files to batch process
+#   - Processes each file and saves the returned text info for all the relevant traces on the file
+#
+# Parameters:
+#   calibration                     - weight calibration object (MOM_Calculations.Calibration)
+#   calibration_user_entered_values - tkinter text input frames to update initial calibration values (list of tkinter.Entry)
+#   output_frame_text               - tkinter output text widget frame for writing (tkinter.Text)
+# Returns: None
+#######
+def process_auto_batch(calibration, calibration_user_entered_values, output_frame_text, show_graph = True):
+ 
+    do_print = True
+
+    # User selects folder to deal with 
+    folder_path = filedialog.askdirectory()
+
+    if do_print: 
+        print(folder_path)
+        all_files = os.listdir(folder_path)
+    
+        # Filter out only files (not directories)
+        files = [f for f in all_files if os.path.isfile(os.path.join(folder_path, f))]
+
+        # Print each file name
+        for file_name in files:
+            print(file_name)
+
+    if(folder_path):
+
+
+        # Define the header and initialize the list with the header
+        column_names = ["Filename", "Sequence", "DateTime", "Start_pt", "End_pt", "W1", "W2", "W3", "W4", "W5", "Intcpt", "Slope"]
+
+        # Setup a list to hold all the results from all the files
+        batch_output = []
+
+        # Define valid file extensions
+        valid_extensions = ('.txt', '.csv', '.TXT', '.CSV')
+
+        for filename in os.listdir(folder_path):
+            if filename.startswith('.DS'):
+                continue
+
+            if filename.startswith('DL') and filename.lower().endswith(valid_extensions):
+                if do_print:
+                    print(f"Handling: {filename}")
+
+                f_path = os.path.join(folder_path, filename)
+            
+                
+                # Process the file and get the output
+                my_output = auto_one_file(f_path, calibration, calibration_user_entered_values, output_frame_text, show_graph=False)
+                
+                # Assuming auto_one_file returns a list of lists or tuples with the expected data format
+                if do_print:
+                    print(my_output)
+
+                # the built-in auto formatting doesn't work for exporting the data, so change a couple of things
+                # 1- we don't need an extra hard return
+                stripped_data = [line.strip('\n') for line in my_output]
+                # 2- also remove the leading \t
+                stripped_data = [line.strip('\t') for line in stripped_data]
+                batch_output.extend(stripped_data)
+
+                if do_print:
+                    print("Combined, next file...")
+
+        # Ask the user to choose the file path and name for saving the output
+        output_file_path = filedialog.asksaveasfilename(title="Save Combined File As", defaultextension=".txt",
+                                                    filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
+        
+        batch_output_df = pd.DataFrame(batch_output, columns=['Formatted_Output'])
+
+
+        batch_output_df.to_csv(output_file_path, index=False, header=False, sep='\t')
+
+        messagebox.showinfo("Files processed and saved.")
+        return None
     else:
-        # Parse data from the file
-        dat = parse_trace_file(f_path)
-
-        # File parse failures will return None data; exit if that occurred
-        if dat is None:
-            return
-
-        # Extract useful file name for display / report
-        f_name = os.path.basename(f_path)
-
-        # Write the initial processing output to GUI text widget
-        output_header(dat, f_name, "AUTO PROCESSING", output_frame_text)
-
-        if(False):
-            # could check for good calibration and if not good, then ask user to do it - not for batch processing though
-            # Allow the user to calibrate - COULD PASS ARGUMENT FOR MANUAL VS. AUTO-CALIBRATION
-            #   (will check if calibration object is initialized and, if so, ask user if they want to retain)
-            calibration = run_user_calibration(dat, calibration, calibration_user_entered_values, output_frame_text)
-        else:
-            calibration = run_auto_calibration(dat, calibration, calibration_user_entered_values, output_frame_text)
-        if calibration is None or not calibration.initialized:
-            return
-
-        # Output calibration info to GUI
-        output_calibration(calibration, output_frame_text)
-
-        # ------------------
-        # Automatic measurements from single file
-        # ------------------
-
-        # Get the 30g threshold 
-        threshold_30 = (30 - calibration.regression_intercept) / calibration.regression_gradient + calibration.baseline
-
-        # Threshold the data
-        # Values >30g become 1
-        # Values <=30g become 0 
-        threshed = (dat.loc[:, "Measure"] > threshold_30).astype(int)
-
-        # Open small blips of 0s (<10 samples long)
-        # This merges windows that are close to one another
-        # For example: --_-------- becomes --------------
-
-        # A string of 0s starts when the value is 0, and the previous (shifted 1) value is 1 
-        zero_starts = (threshed == 0) & (threshed.shift(1) == 1)
-        # A string of 0s ends when the value is 0, and the next (shifted -1) value is 1
-        zero_ends = (threshed == 0) & (threshed.shift(-1) == 1)
-
-        # Get the integer indices associated with those starts and ends
-        zero_start_indices = zero_starts[zero_starts].index
-        zero_end_indices = zero_ends[zero_ends].index
-
-        # Cut any "ends" that are actually 0s->1s at the beginning of the file
-        # As a result, the starts and ends are now aligned to mark a single window of 0s
-        zero_end_indices = zero_end_indices[zero_end_indices > zero_start_indices.min()]
-        
-        # Go through every pair of start-end values (this marks the edges of a window of 0s) 
-        for start, end in zip(zero_start_indices, zero_end_indices):
-            # if the size of that window of 0s is <10 samples long
-            # mark those values as 1s, instead of 0s
-            if end - start + 1 < 10 :
-                threshed.iloc[start:(end+1)] = 1
-
-        # Now find the windows of 1s
-        # These are values registered at >30g
-
-        # A string of 1s starts when the value is 1, and the previous (shifted 1) value is 0
-        window_starts = (threshed == 1) & (threshed.shift(1) == 0)
-        # A string of 1s ends when the value is 1, and the next (shifted -1) value is 0
-        window_ends = (threshed == 1) & (threshed.shift(-1) == 0)
-
-        # Extend the window by one in each direction to get the left and the rightmost peaks included in the window
-        # Needed when searching for 2nd peaks for penguin rule
-        window_starts_indices = window_starts[window_starts].index - 1
-        window_end_indices = window_ends[window_ends].index + 1
-
-        # Cut any "ends" that are actually 1s->0s at the beginning of the file
-        # As a result, the starts and ends are now aligned to mark a single window of 1s
-        window_end_indices = window_end_indices[window_end_indices > window_starts_indices.min()]
-
-        # Close small blips of 1s (<25 samples long)
-        # This erases measurement windows that are very short
-        # For example: __-______ becomes _________
-
-        # Make a new list of the open windows to retain
-        # (this allows us to retain the original windows if needed, unlike when closed down the blips of 0s)
-        retained_window_starts_indices = []
-        retained_window_ends_indices = []
-
-        # Go through every pair of start-end values (this marks the edges of a window of 1s) 
-        for start, end in zip(window_starts_indices, window_end_indices):
-            # if the size of that window of 1s is <25 samples long
-            if end - start + 1 > 25:
-                # mark those values as 0s, instead of 1s
-                retained_window_starts_indices.append(start)
-                retained_window_ends_indices.append(end)
-
-        # Lists to keep track of selected peak locations 
-        # and corresponding measurements between those peaks
-        peak_markers_x = []
-        peak_markers_y = []
-        measure_centers_x = []
-        measure_centers_y = []
-        measures = []
-
-        # List to keep track of full output for every trace in the file
-        formatted_output = []
-
-        # as in manual multiple birds, this does all the traces in the file, so count them
-        trace_counter = 1
-
-        # For each measurement window of 1s, find the peaks and measure within those peaks
-        for start, end in zip(retained_window_starts_indices, retained_window_ends_indices):
-            # Get the measurement data in the window
-            window = dat.loc[start:end, "Measure"]
-            
-            # Get the sign switches at every location in the trace
-            # Start by calculating the rolling difference, like the first derivative: window.diff()
-            #   series [a, b, c] becomes series[NA, b-a, c-b]
-            # Simplify to the sign of the first derivative: np.sign(window.diff())
-            #   increasing = 1, decreasing = -1
-            # Now get the derivative of those signs: np.sign(window.diff()).diff()
-            #   inc->inc =  1 -  1 =  0
-            #   dec->dec = -1 - -1 =  0 
-            #   inc->dec = -1 -  1 = -2
-            #   dec->inc =  1 - -1 =  2
-            # Fill the NA values with 0 
-            # (will be the first values in the Series, because there are no previous values to take differences from with .diff)
-            sign_switches = np.sign(window.diff()).diff().fillna(0)
-
-            # The PEAKS are areas where the trace is going from increasing to decreasing
-            # so find indices in the original trace where the sign_switch is -2
-            # Shift one index to the left to adjust for .diff()
-            peaks = sign_switches[sign_switches == -2].index - 1
-
-            # Now we are finding the actual measurement window via penguin rule
-            # By default, start with the actual starta nd end value of the window
-            start_peak_index = start
-            end_peak_index = end
-
-            # If there are 3 or more peaks, take the penguin rule peaks
-            if len(peaks) > 2:
-                # Second peak
-                start_peak_index = peaks[1]
-                # Second-to-last peak
-                end_peak_index = peaks[-2]
-
-            # Find central value of the window
-            measure_center = int((start_peak_index + end_peak_index) / 2)
-
-            # CHANGE 8/30/24 - GET the LOCAL BASELINE VALUE HERE
-            local_baseline, good_flag = get_bird_baseline(dat, start_peak_index, end_peak_index, buffer_size=800, window_size=40)
-
-            # Find the weight within the window
-            # NOTE you could call run_weights() here, like in process_manual
-            #      For doing a batch of files, you could call run_weights() and store the csv-formatted output strings
-            # measure, _, _, _ = MOM_Calculations.w_windowed_min_slope_mid(dat, calibration, start_peak_index, end_peak_index, local_baseline)
-            # measure, _, _, _ = MOM_Calculations.w_windowed_min_slope(dat, calibration, start_peak_index, end_peak_index, local_baseline)
-
-            wt_info = run_weights(dat, calibration, start_peak_index, end_peak_index, local_baseline, f_name, trace_counter, output_frame_text, include_header=False, write_output_to_screen=False)
-            values = wt_info.split(',')
-
-            # get the 11th value to put toward the graphing
-            if len(values) >= 11:
-                weight_min_slope_value = values[10].strip()
-                measure = float(weight_min_slope_value)  # Convert to float
-            else:
-                measure = 0
-
-            # add the weight info to the output to be saved
-            # Append the formatted string to the list
-            formatted_output.append(wt_info)
-
-            # increment the trace
-            trace_counter = trace_counter + 1
-
-            if (show_graph):
-                # This is all for plotting
-                peak_markers_x.append(start_peak_index)
-                peak_markers_x.append(end_peak_index)
-                peak_markers_y.append(dat.loc[start_peak_index, "Measure"])
-                peak_markers_y.append(dat.loc[end_peak_index, "Measure"])
-                measure_centers_x.append(measure_center)
-                measure_centers_y.append(dat.loc[measure_center, "Measure"])
-                measure = 0
-                measures.append(round(measure, 2))
-        
-        if (show_graph):
-            # ------------------
-            # This is all just plotting
-            # ------------------
-            peak_markers = pd.DataFrame({"x":peak_markers_x,
-                                        "y":peak_markers_y})
-            measure_labels = pd.DataFrame({"x":measure_centers_x,
-                                        "y":measure_centers_y,
-                                        "label":[str(x) for x in measures]})
-            
-            plt.ion()
-            fig, (ax1, ax2) = plt.subplots(nrows=2, sharex=True)
-            fig.set_size_inches((15,4))  # (default_figure_width, default_figure_height)) 
-            ax1.plot(dat.loc[:, "Measure"])
-            ax1.scatter(peak_markers["x"].astype(float), peak_markers["y"].astype(float), color="red")
-            for i in range(len(measure_labels)):
-                ax1.text(measure_labels["x"].astype(float).iloc[i], 
-                        measure_labels["y"].astype(float).iloc[i], 
-                        measure_labels["label"].iloc[i], 
-                        color="red", horizontalalignment="center")
-
-            # Currently just show plot the user and exit
-            ax2.plot(threshed, "r")
-
-        return formatted_output
+        messagebox.showinfo("No folder chosen.")
+        return None
+    
 
 
 #######
@@ -967,7 +844,7 @@ def process_auto(calibration, calibration_user_entered_values, output_frame_text
 def run_auto_calibration(dat, calibration, calibration_user_entered_values, output_frame_text):
     # If the calibration has not been initialized OR the user declines the opportunity to use the previous one, take it
     # NOTE python short-circuits the OR operator, so if the calibration has not been initialized, we will automatically take the calibration
-    if not calibration.initialized or not messagebox.askyesno("Confirmation", "Use previous calibration?"):
+    if True: # ALAWAYS DO THAT AUTO CALIBRATION...... REMOVED: not calibration.initialized or not messagebox.askyesno("Confirmation", "Use previous calibration?"):
         # Set manual calibration values from entry frames
         # checking to see that the values are well-formed floats (not e.g., text)
         if not calibration.set_true(*[entry.get() for entry in calibration_user_entered_values]):
@@ -990,7 +867,7 @@ def run_auto_calibration(dat, calibration, calibration_user_entered_values, outp
         calibration_difference_values = calibration.get_difference()
         calibration_regressed_values = [x * calibration.regression_gradient + calibration.regression_intercept for x in calibration_difference_values]
 
-        if(True):
+        if(False):
             # Second, plotting the calibrations for user confirmation 
             _, ax = plt.subplots()
             ax.plot(calibration_difference_values, calibration_true_values, marker="o", color="black", linestyle="None")
@@ -1372,13 +1249,7 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
     # Write the initial processing output to GUI text widget
     output_header(dat, f_name, "AUTO PROCESSING", output_frame_text)
 
-    if(False):
-        # could check for good calibration and if not good, then ask user to do it - not for batch processing though
-        # Allow the user to calibrate - COULD PASS ARGUMENT FOR MANUAL VS. AUTO-CALIBRATION
-        #   (will check if calibration object is initialized and, if so, ask user if they want to retain)
-        calibration = run_user_calibration(dat, calibration, calibration_user_entered_values, output_frame_text)
-    else:
-        calibration = run_auto_calibration(dat, calibration, calibration_user_entered_values, output_frame_text)
+    calibration = run_auto_calibration(dat, calibration, calibration_user_entered_values, output_frame_text)
     if calibration is None or not calibration.initialized:
         return
 
@@ -1517,22 +1388,26 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
         # measure, _, _, _ = MOM_Calculations.w_windowed_min_slope_mid(dat, calibration, start_peak_index, end_peak_index, local_baseline)
         # measure, _, _, _ = MOM_Calculations.w_windowed_min_slope(dat, calibration, start_peak_index, end_peak_index, local_baseline)
 
-        wt_info = run_weights(dat, calibration, start_peak_index, end_peak_index, local_baseline, f_name, trace_counter, output_frame_text, include_header=False, write_output_to_screen=False)
-        values = wt_info.split(',')
+        wt_info = run_weights(dat, calibration, start_peak_index, end_peak_index, local_baseline, f_name, trace_counter, output_frame_text, include_header=False, write_output_to_screen=True)
+        
+        # add the weight info to the output to be saved
+        # Append the formatted string to the list, but only if it is the 3rd one or later. The first 2 were used in the calibration
+        # If we want to check for accuracy, could keep these - change to >0 if you want to check for process
+        if(trace_counter > 2):
+            formatted_output.append(wt_info)
+
+        # increment the trace
+        trace_counter = trace_counter + 1
+        
+        
 
         # get the 11th value to put toward the graphing
+        values = wt_info.split(',')
         if len(values) >= 11:
             weight_min_slope_value = values[10].strip()
             measure = float(weight_min_slope_value)  # Convert to float
         else:
             measure = 0
-
-        # add the weight info to the output to be saved
-        # Append the formatted string to the list
-        formatted_output.append(wt_info)
-
-        # increment the trace
-        trace_counter = trace_counter + 1
 
         if (show_graph):
             # This is all for plotting
