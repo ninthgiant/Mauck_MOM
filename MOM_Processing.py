@@ -788,18 +788,16 @@ def process_auto_batch(calibration, calibration_user_entered_values, output_fram
                 continue
 
             if filename.startswith('DL') and filename.lower().endswith(valid_extensions):
-                if do_print:
-                    print(f"Handling: {filename}")
+
+                if do_print: print(f"Handling: {filename}")
 
                 f_path = os.path.join(folder_path, filename)
-            
                 
                 # Process the file and get the output
                 my_output = auto_one_file(f_path, calibration, calibration_user_entered_values, output_frame_text, show_graph=False)
                 
                 # Assuming auto_one_file returns a list of lists or tuples with the expected data format
-                if do_print:
-                    print(my_output)
+                if do_print: print(my_output)
 
                 # the built-in auto formatting doesn't work for exporting the data, so change a couple of things
                 # 1- we don't need an extra hard return
@@ -808,14 +806,22 @@ def process_auto_batch(calibration, calibration_user_entered_values, output_fram
                 stripped_data = [line.strip('\t') for line in stripped_data]
                 batch_output.extend(stripped_data)
 
-                if do_print:
-                    print("Combined, next file...")
+                if do_print: print("Combined, next file...")
 
         # Ask the user to choose the file path and name for saving the output
         output_file_path = filedialog.asksaveasfilename(title="Save Combined File As", defaultextension=".txt",
                                                     filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
         
         batch_output_df = pd.DataFrame(batch_output, columns=['Formatted_Output'])
+
+        # pseudo header added
+        new_row = {"Formatted_Output": "fname,seq,dtime,start,stop,wMean,wMeanG,wMedian,wMinSlope,wMinSlopeG,slope,minSlope"}
+        # Convert the new row to a DataFrame so we can put it at the top of the list
+        new_row_df = pd.DataFrame([new_row])
+
+        batch_output_df = pd.concat([new_row_df, batch_output_df], ignore_index=True)
+
+        # batch_output_df = pd.concat([batch_output_df, pd.DataFrame([new_row])], ignore_index=True)
 
 
         batch_output_df.to_csv(output_file_path, index=False, header=False, sep='\t')
