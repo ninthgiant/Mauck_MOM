@@ -21,6 +21,7 @@ from tkinter import messagebox
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+import time as tm
 
 import MOM_Calculations
 
@@ -40,7 +41,7 @@ PLOT_VIEWER_HEIGHT = 5
 # Internal Flag for printing
 #######################################
 #######################################
-do_print = False
+do_print = True
 
 #######################################
 #######################################
@@ -564,7 +565,7 @@ def run_weights(dat, calibration,
     weight_mean_gravity = MOM_Calculations.w_adjust_for_gravity(weight_mean, slope)
     weight_median, _ = MOM_Calculations.w_median(dat, calibration, start_index, end_index, baseline_mean)
     weight_min_slope, min_slope, window_start_index, window_end_index = MOM_Calculations.w_windowed_min_slope(dat, calibration, start_index-10, end_index+10, baseline_mean, 25, 0.7)
-    weight_min_slope_gravity = MOM_Calculations.w_adjust_for_gravity(weight_min_slope, min_slope)
+    weight_min_slope_gravity = MOM_Calculations.w_linear_model(weight_min_slope, weight_median)
 
     # Datetime of the center of the trace segment
     datetime = dat.loc[int((start_index+end_index)/2), "Datetime"]
@@ -625,6 +626,7 @@ def view(output_frame_text):
 # Function process_manual [CORE OPERATION]
 #   User opens a strain measurement file from a loadcell, marks calibration segments, and then measures bird segments
 #   Write output to GUI text widget
+#   CHANGE NEEDED: lost ability to output results to a text file. Could copy/paste from screen, but better to allow export
 # Parameters:
 #   calibration                     - weight calibration object (MOM_Calculations.Calibration)
 #   calibration_user_entered_values - tkinter text input frames to update initial calibration values (list of tkinter.Entry)
@@ -746,6 +748,7 @@ def process_auto(calibration, calibration_user_entered_values, output_frame_text
 #   - Runs automated processing of multiple files
 #   - User chooses a folder containing all the files to batch process
 #   - Processes each file and saves the returned text info for all the relevant traces on the file
+#   - Only processes files starting with "DL" and ending with "TXT" or "CSV" (and lowercase)
 #
 # Parameters:
 #   calibration                     - weight calibration object (MOM_Calculations.Calibration)
@@ -768,11 +771,12 @@ def process_auto_batch(calibration, calibration_user_entered_values, output_fram
         files = [f for f in all_files if os.path.isfile(os.path.join(folder_path, f))]
 
         # Print each file name
-        for file_name in files:
-            print(file_name)
+        for file_name in files: print(file_name)
 
     if(folder_path):
 
+        ## start timer
+        start_time = tm.time()
 
         # Define the header and initialize the list with the header
         column_names = ["Filename", "Sequence", "DateTime", "Start_pt", "End_pt", "W1", "W2", "W3", "W4", "W5", "Intcpt", "Slope"]
@@ -785,6 +789,7 @@ def process_auto_batch(calibration, calibration_user_entered_values, output_fram
 
         for filename in os.listdir(folder_path):
             if filename.startswith('.DS'):
+                # skip this file that MacOS makes in the background
                 continue
 
             if filename.startswith('DL') and filename.lower().endswith(valid_extensions):
@@ -793,11 +798,15 @@ def process_auto_batch(calibration, calibration_user_entered_values, output_fram
 
                 f_path = os.path.join(folder_path, filename)
                 
-                # Process the file and get the output
-                my_output = auto_one_file(f_path, calibration, calibration_user_entered_values, output_frame_text, show_graph=False)
-                
-                # Assuming auto_one_file returns a list of lists or tuples with the expected data format
-                if do_print: print(my_output)
+                try:
+                    # Process the file and get the output
+                    my_output = auto_one_file(f_path, calibration, calibration_user_entered_values, output_frame_text, show_graph=False)
+                    
+                    # Assuming auto_one_file returns a list of lists or tuples with the expected data format
+                    if do_print: print(my_output)
+                except Exception as e:
+                    print("error occurred")
+                    my_output = filename
 
                 # the built-in auto formatting doesn't work for exporting the data, so change a couple of things
                 # 1- we don't need an extra hard return
@@ -808,6 +817,13 @@ def process_auto_batch(calibration, calibration_user_entered_values, output_fram
 
                 if do_print: print("Combined, next file...")
 
+        # end timer and Calculate elapsed time
+        end_time = tm.time()
+        elapsed_time = end_time - start_time  
+        print("-------- ")
+        print(f"Time taken using time module: {end_time - start_time:.4f} seconds")
+        print("--------")
+        
         # Ask the user to choose the file path and name for saving the output
         output_file_path = filedialog.asksaveasfilename(title="Save Combined File As", defaultextension=".txt",
                                                     filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
@@ -818,18 +834,15 @@ def process_auto_batch(calibration, calibration_user_entered_values, output_fram
         new_row = {"Formatted_Output": "fname,seq,dtime,start,stop,wMean,wMeanG,wMedian,wMinSlope,wMinSlopeG,slope,minSlope"}
         # Convert the new row to a DataFrame so we can put it at the top of the list
         new_row_df = pd.DataFrame([new_row])
-
+        # put the new row before the rest of the data - now a header
         batch_output_df = pd.concat([new_row_df, batch_output_df], ignore_index=True)
-
-        # batch_output_df = pd.concat([batch_output_df, pd.DataFrame([new_row])], ignore_index=True)
-
 
         batch_output_df.to_csv(output_file_path, index=False, header=False, sep='\t')
 
-        messagebox.showinfo("Files processed and saved.")
+        tk.messagebox.showinfo(message = "Files processed and saved.")
         return None
     else:
-        messagebox.showinfo("No folder chosen.")
+        tk.messagebox.showinfo(message = "No folder chosen. Try again.")
         return None
     
 
@@ -911,6 +924,8 @@ def run_auto_calibration(dat, calibration, calibration_user_entered_values, outp
 ##############
 def get_auto_calibration_values(dataframe, baseline_fraction=0.0003, num_sections=10, window_size=75, std_threshold=200, tolerance=5000, lines = 5000):
  
+    if do_print: print("in get_auto_calibration_values")
+
     # Slice the first 5000 lines - make this a parameter - 5000 ONLY FOR Calibration does this work!
     if(lines > 0):
         subset_data = dataframe.head(5000)
@@ -933,24 +948,26 @@ def get_auto_calibration_values(dataframe, baseline_fraction=0.0003, num_section
 
     if do_print:
         print(f"Length of results dataframe: {len(results)}")
-    filtered_results = results[results['Std'] < std_threshold]
-    if(len(filtered_results)> 0):
-        results = results[results['Std'] < std_threshold]
-        if do_print:
-            print(f"Throw out all with STD > {std_threshold}")
-            print(f"Length of results now: {len(results)}: must redo indices")
-        results = results.reset_index(drop=True)
-        
-    else:
-        if do_print: print("keeping messy data to find min")
+
       
     # Find the index of the row with the lowest mean and lowest variation
     min_mean_index = results['Mean'].idxmin()
     min_std_index = results['Std'].idxmin()
 
-    # Check which index satisfies both conditions - use lowest variation if have to choose
-    baseline_index = min_mean_index if min_std_index == min_mean_index else results['Std'].idxmin()
-    
+    m_value = results.iloc[min_mean_index]['Mean']
+    s_value = results.iloc[min_std_index]['Mean']
+
+    if do_print:
+        print(f"Mean at min_mean_index {min_mean_index}: {results.iloc[min_mean_index]['Mean']}")
+        print(f"Mean at min_std_index {min_std_index}: {results.iloc[min_std_index]['Mean']}")
+
+    # Check which index satisfies both conditions - use lower value of the two, if needed
+    # baseline_index = min_mean_index if min_std_index == min_mean_index else results['Mean'].idxmin()
+    if (m_value < s_value):
+        baseline_index = min_mean_index
+    else:
+        baseline_index = min_std_index
+
     # Extract the baseline window
     baseline_cal_mean= results.iloc[baseline_index]['Mean']
 
@@ -1003,7 +1020,7 @@ def get_auto_calibration_values(dataframe, baseline_fraction=0.0003, num_section
         for i, row in sections_df.iterrows():      
             start_pt = row['Start']
             stop_pt = row['Stop']
-            sections_df.at[i, 'Mean'], _, _, _,  = section_mean, section_slope, section_start, section_len = find_calibration_flats(dataframe, start_pt, stop_pt, 60, high_threshold, 0.7)
+            sections_df.at[i, 'Mean'], _, _, _,  = section_mean, section_slope, section_start, section_len = find_calibration_flats(subset_data, start_pt, stop_pt, 60, high_threshold, 0.7)
 
         cal1_mean = sections_df['Mean'].iloc[0] if len(sections_df) > 0 else None
         cal2_mean = sections_df['Mean'].iloc[1] if len(sections_df) > 1 else None
@@ -1111,6 +1128,7 @@ def get_bird_baseline(my_bird_df, start_index, stop_index, buffer_size=800, wind
 #    find_calibration_flats - RAM 7/23/2024
 #    Function to ID calibration weights - was do_Slope_0
 #       now only used when finding baseline and calibration weights without user input
+#       CLUNKY - need to clean it up 8/4/2024
 #    Parameters:
 #    - measure_series: DataFrame  containing the measure data. Get the the whole dataframe, so you can go oustide bounds
 #       - of the window of interst of your f\jull slope measures
@@ -1118,7 +1136,7 @@ def get_bird_baseline(my_bird_df, start_index, stop_index, buffer_size=800, wind
 #    - stop_pt: Ending point (long integer).  could just be the lenght of the slice we are sending it when using real data
 #    - min_len: Minimum length of windows (long integer). We have data that could determine the right number for this
 #    - min_threshold: Minimum threshold for the intercept value (real number).
-#    - max_pct: Max proportion of the passed series to be used to determine the max length of windows (real number, default is 0.5).
+#    - max_pct: Max proportion of the passed series to be used to determine the max length of windows (real number, default is 0.5). NOT USED NOW
 # 
 #   Returns:
 #    - Mean Value for calculation of mass AND starting point and width of window used
@@ -1126,6 +1144,7 @@ def get_bird_baseline(my_bird_df, start_index, stop_index, buffer_size=800, wind
 def find_calibration_flats(measure_series, start_pt, stop_pt, min_len, min_threshold, max_pct=0.5):
 
     max_len = int((stop_pt - start_pt) * max_pct)
+    max_len = min_len + 1  # only looking for a flat spot, so don't mess around, could get rid of these, too
     if(max_len <= min_len):
         max_len = min_len + 2 # (stop_pt - start_pt)
     total_windows = max_len - min_len
@@ -1161,7 +1180,7 @@ def find_calibration_flats(measure_series, start_pt, stop_pt, min_len, min_thres
             mean_val = new_series['Measure'].mean()
 
             if(do_print):
-                print(f"x_values: {x_values}")
+                # print(f"x_values: {x_values}")
                 print(f"slope: {slope}")
                 print(f"intercept: {intercept}")
                 print(f"mean_val: {mean_val}")
@@ -1289,7 +1308,8 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
 
     # Cut any "ends" that are actually 0s->1s at the beginning of the file
     # As a result, the starts and ends are now aligned to mark a single window of 0s
-    zero_end_indices = zero_end_indices[zero_end_indices > zero_start_indices.min()]
+    # Next line changed to ">=" from ">" to correct problem found 8/5/24
+    zero_end_indices = zero_end_indices[zero_end_indices >= zero_start_indices.min()]
     
     # Go through every pair of start-end values (this marks the edges of a window of 0s) 
     for start, end in zip(zero_start_indices, zero_end_indices):
@@ -1313,7 +1333,8 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
 
     # Cut any "ends" that are actually 1s->0s at the beginning of the file
     # As a result, the starts and ends are now aligned to mark a single window of 1s
-    window_end_indices = window_end_indices[window_end_indices > window_starts_indices.min()]
+    # Next line changed to ">=" from ">" to correct problem found 8/5/24
+    window_end_indices = window_end_indices[window_end_indices >= window_starts_indices.min()]
 
     # Close small blips of 1s (<25 samples long)
     # This erases measurement windows that are very short
@@ -1331,6 +1352,9 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
             # mark those values as 0s, instead of 1s
             retained_window_starts_indices.append(start)
             retained_window_ends_indices.append(end)
+        else:
+            # else added 8/5/24
+            threshed.iloc[start:(end+1)] = 0
 
     # Lists to keep track of selected peak locations 
     # and corresponding measurements between those peaks

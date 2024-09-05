@@ -331,3 +331,22 @@ def w_adjust_for_gravity(W1, adj_slope):
     W2 = W1 * (1 + adj_slope / g)
     
     return W2
+
+################
+#  w_linear_model: 
+#   Function: Adjust weight for effect of gravity after Algorithm from Afanasyev et al. 2015 - RAM 6/25/2024 with help from ChatGPT
+#       Could change the actual model if we find somethng better. See PPT discussion 
+#   Parameters
+#       receives the weight according to w_median (W4) and w_slope (W3)
+#       runs linear model based on 100 known weights from R analysis
+#       linear model Calculation
+#          wt = w_slope*0.37074 + w_median*0.32060 + 15.88565
+#    Returns
+#       value for wt
+#######
+def w_linear_model(W3, W4):
+    
+    # Calculate Wt
+    wt = W3*0.37074 + W4*0.32060 + 15.88565
+    
+    return wt
