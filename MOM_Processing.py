@@ -41,7 +41,7 @@ PLOT_VIEWER_HEIGHT = 5
 # Internal Flag for printing
 #######################################
 #######################################
-do_print = True
+do_print = False
 
 #######################################
 #######################################
@@ -861,42 +861,38 @@ def process_auto_batch(calibration, calibration_user_entered_values, output_fram
 #   calibration object, uninitialized or initialized (MOM_Calculations.Calibration) or None, if user calibration failed 
 #######
 def run_auto_calibration(dat, calibration, calibration_user_entered_values, output_frame_text):
-    # If the calibration has not been initialized OR the user declines the opportunity to use the previous one, take it
-    # NOTE python short-circuits the OR operator, so if the calibration has not been initialized, we will automatically take the calibration
-    if True: # ALAWAYS DO THAT AUTO CALIBRATION...... REMOVED: not calibration.initialized or not messagebox.askyesno("Confirmation", "Use previous calibration?"):
-        # Set manual calibration values from entry frames
-        # checking to see that the values are well-formed floats (not e.g., text)
-        if not calibration.set_true(*[entry.get() for entry in calibration_user_entered_values]):
-            output_error("ERROR invalid calibration input value", output_frame_text)
-            # We return without an initialized calibration object if this failed
-            return
 
-        # Conduct calibrations
-        calibration_true_values = calibration.get_true()
+    if not calibration.set_true(*[entry.get() for entry in calibration_user_entered_values]):
+        output_error("ERROR invalid calibration input value", output_frame_text)
+        # We return without an initialized calibration object if this failed
+        return
 
-        baseline_cal_mean, cal1_mean, cal2_mean, cal3_mean = get_auto_calibration_values(dat, baseline_fraction=0.0003, num_sections=10, window_size=75, std_threshold=200, tolerance=5000, lines = 5000)
+    # Conduct calibrations
+    calibration_true_values = calibration.get_true()
 
+    baseline_cal_mean, cal1_mean, cal2_mean, cal3_mean = get_auto_calibration_values(dat, baseline_fraction=0.0003, num_sections=10, window_size=75, std_threshold=200, tolerance=5000, lines = 5000)
 
-        # Conduct calibration regression (results stored in object)
-        # Now calibration.initialized is True
-        calibration.regression(baseline_cal_mean, cal1_mean, cal2_mean, cal3_mean)
-        
-        # Show the user the regression
-        # First, extracting the calibration values from the stored object
-        calibration_difference_values = calibration.get_difference()
-        calibration_regressed_values = [x * calibration.regression_gradient + calibration.regression_intercept for x in calibration_difference_values]
+    # Conduct calibration regression (results stored in object)
+    # Now calibration.initialized is True
+    calibration.regression(baseline_cal_mean, cal1_mean, cal2_mean, cal3_mean)
+    
+    # First, extracting the calibration values from the stored object
+    calibration_difference_values = calibration.get_difference()
+    calibration_regressed_values = [x * calibration.regression_gradient + calibration.regression_intercept for x in calibration_difference_values]
 
-        if(False):
-            # Second, plotting the calibrations for user confirmation 
-            _, ax = plt.subplots()
-            ax.plot(calibration_difference_values, calibration_true_values, marker="o", color="black", linestyle="None")
-            ax.plot(calibration_difference_values, calibration_regressed_values, color="gray", linestyle="dashed")
-            plt.xlabel("Measured value (strain difference from baseline)")
-            plt.ylabel("True value (g)")
-            plt.title("Calibration regression\n(R^2={r}, Inter={i}, Slope={s})".format(r=round(calibration.regression_rsquared,5), 
-                                                                                    s=round(calibration.regression_gradient,5),
-                                                                                    i=round(calibration.regression_intercept,5)))
-            plt.show()
+    # check for a good calibration
+
+    if(False):  # do not plot the fit
+        # Second, plotting the calibrations for user confirmation 
+        _, ax = plt.subplots()
+        ax.plot(calibration_difference_values, calibration_true_values, marker="o", color="black", linestyle="None")
+        ax.plot(calibration_difference_values, calibration_regressed_values, color="gray", linestyle="dashed")
+        plt.xlabel("Measured value (strain difference from baseline)")
+        plt.ylabel("True value (g)")
+        plt.title("Calibration regression\n(R^2={r}, Inter={i}, Slope={s})".format(r=round(calibration.regression_rsquared,5), 
+                                                                                s=round(calibration.regression_gradient,5),
+                                                                                i=round(calibration.regression_intercept,5)))
+        plt.show()
 
     return calibration
 
