@@ -23,6 +23,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import time as tm
 
+# import tkinter as tk
+# from tkinter import filedialog, messagebox
+# from tkinter import ttk
+# import os
+# import pandas as pd
+import threading
+
 import MOM_Calculations
 
 #######################################
@@ -758,7 +765,7 @@ def process_auto(calibration, calibration_user_entered_values, output_frame_text
 #######
 def process_auto_batch(calibration, calibration_user_entered_values, output_frame_text, show_graph = True):
  
-    do_print = True
+    do_print = False
 
     # User selects folder to deal with 
     folder_path = filedialog.askdirectory()
@@ -1240,20 +1247,20 @@ def find_calibration_flats(measure_series, start_pt, stop_pt, min_len, min_thres
 
 ##############
 #    auto_one_file - RAM 9/1/2024
-#       a subset of original fuction: process_auto(calibration, calibration_user_entered_values, output_frame_text, show_graph = True):
-#    Function to do all the automatic calculations on a single file
-#       now only used when finding baseline and calibration weights without user input
+#       Function to do all the automatic calculations on a single file
+#       Can be used as stand-alone (Automatic Button) or on each of a series of files (Auto Batch)
+#       used when finding baseline and calibration weights without user input
+#           - automatically does the calibration calculations from the beginning of the file
+#           - locates and evaluates all relevant traces, including finding that trace's baseline
 #    Parameters:
-#    - f_path - the location of the file to be processed 
-#       - of the window of interst of your f\jull slope measures
-#    - start_pt: Starting point (long integer). where to start and end the window counting
-#    - stop_pt: Ending point (long integer).  could just be the lenght of the slice we are sending it when using real data
-#    - min_len: Minimum length of windows (long integer). We have data that could determine the right number for this
-#    - min_threshold: Minimum threshold for the intercept value (real number).
-#    - max_pct: Max proportion of the passed series to be used to determine the max length of windows (real number, default is 0.5).
-# 
+#       f_path - the location of the file to be processed 
+#       calibration object
+#       user values for the calibratoin from the screen
+#       pointer to the onscreen text output
+#       show_graph - if true, gives user look at the calibration regression and traces - should be False for batch operations
+#   
 #   Returns:
-#    - Mean Value for calculation of mass AND starting point and width of window used
+#       text list with (for each file): file name, trace number, date/time of trace, 5 weight values, slope of measured trace, min slope found
 #########
 def auto_one_file(f_path, calibration, calibration_user_entered_values, output_frame_text, show_graph = True):
 
@@ -1471,3 +1478,199 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
         ax2.plot(threshed, "r")
 
     return formatted_output
+
+##############################################################
+##############################################################
+# Code to add user feedback during Auto Batch process
+# May need to move all/some of it to GUI.py or another file
+##############################################################
+##############################################################
+
+'''  IN case we move this to another file, here are the libararies needed
+import tkinter as tk
+from tkinter import filedialog, messagebox
+
+import os
+import pandas as pd
+import threading
+'''
+# need this just for the progress window, "tk" alone isn't enough
+from tkinter import ttk
+
+# Global variables needed for the progress window management
+stop_processing = False
+progress_window = None
+
+##############
+#    create_progress_window
+#       
+#    Parameters:
+#       number of files to go thru, flag for whether to close it or not
+# 
+#   Returns:
+#    - progress bar oject, text for the label, text for current file, filename_label
+#########
+def create_progress_window(total_files, on_close):
+    global progress_window
+    progress_window = tk.Toplevel()
+    progress_window.title("Processing Files")
+
+    window_width = 400
+    window_height = 200
+    screen_width = progress_window.winfo_screenwidth()
+    screen_height = progress_window.winfo_screenheight()
+    x = (screen_width // 2) - (window_width // 2)
+    y = (screen_height // 2) - (window_height // 2)
+    progress_window.geometry(f"{window_width}x{window_height}+{x}+{y}")
+
+    progress_window.protocol("WM_DELETE_WINDOW", on_close)
+
+    progress_label = tk.Label(progress_window, text=f"Processing item 1 of {total_files}", font=("Helvetica", 16))
+    progress_label.pack(pady=(10, 5))
+
+    progress_bar = ttk.Progressbar(progress_window, orient="horizontal", length=300, mode="determinate")
+    progress_bar.pack(pady=10)
+
+    labels_frame = tk.Frame(progress_window)
+    labels_frame.pack(pady=10)
+
+    current_item_label = tk.Label(labels_frame, text="Current item:", font=("Helvetica", 14))
+    current_item_label.pack(anchor='center')
+
+    filename_label = tk.Label(labels_frame, text="", font=("Helvetica", 14))
+    filename_label.pack(anchor='center')
+
+    return progress_bar, progress_label, current_item_label, filename_label
+
+##############
+#    update_progress
+#      called each time user feedback is neew
+#    Parameters:
+#     infor for updating the progress bar
+# 
+#   Returns:
+#    - None
+#########
+def update_progress(progress_bar, progress_label, current_item_label, filename_label, current_item_index, total_files, current_item):
+    progress_bar["value"] = current_item_index
+    progress_bar["maximum"] = total_files
+    progress_label.config(text=f"Processing item {current_item_index} of {total_files}")
+    current_item_label.config(text="Current item:")
+    filename_label.config(text=f"Filename: {current_item}")
+    progress_bar.update_idletasks()
+
+##############
+#    on_close
+#       called when done processing, shuts it down
+#    Parameters:
+#       None
+# 
+#   Returns:
+#       None
+#########
+def on_close():
+    global stop_processing
+    stop_processing = True
+    if progress_window is not None:
+        progress_window.destroy()
+
+##############
+#    process_auto_batch_2
+#       a subset of original fuction: process_auto(calibration, calibration_user_entered_values, output_frame_text, show_graph = True):
+#    Parameters:
+#    - f_path - the location of the file to be processed 
+#    - of the window of interst of your f\jull slope measures
+#    - start_pt: Starting point (long integer). where to start and end the window counting
+# 
+#   Returns:
+#    - None; this outputs all the data to the screen and to a text file
+#########
+def process_auto_batch_2(calibration, calibration_user_entered_values, output_frame_text, show_graph=True):
+    global stop_processing, progress_window
+
+    stop_processing = False
+
+    folder_path = filedialog.askdirectory()
+    if not folder_path:
+        tk.messagebox.showinfo(message="No folder chosen. Try again.")
+        return
+
+    all_files = os.listdir(folder_path)
+    # files = [f for f in all_files if os.path.isfile(os.path.join(folder_path, f))]
+
+    files = [f for f in all_files if os.path.isfile(os.path.join(folder_path, f)) and f.startswith("DL_")]
+
+
+    if not files:
+        tk.messagebox.showinfo(message=f"No files starting with 'DL_' found in the selected folder.")
+        return
+
+    if show_graph:
+        progress_bar, progress_label, current_item_label, filename_label = create_progress_window(len(files), on_close)
+
+    column_names = ["Filename", "Sequence", "DateTime", "Start_pt", "End_pt", "W1", "W2", "W3", "W4", "W5", "Intcpt", "Slope"]
+    batch_output = []
+
+    valid_extensions = ('.txt', '.csv', '.TXT', '.CSV')
+
+    for index, filename in enumerate(files, start=1):
+        if stop_processing:
+            break
+
+        if filename.startswith('.DS'):
+            continue
+
+        if filename.startswith('DL') and filename.lower().endswith(valid_extensions):
+            if show_graph:
+                update_progress(progress_bar, progress_label, current_item_label, filename_label, index, len(files), filename)
+
+            f_path = os.path.join(folder_path, filename)
+
+            try:
+                # Assuming auto_one_file is a function that processes the file
+                my_output = auto_one_file(f_path, calibration, calibration_user_entered_values, output_frame_text, False)
+                stripped_data = [line.strip('\n') for line in my_output]
+                stripped_data = [line.strip('\t') for line in stripped_data]
+                batch_output.extend(stripped_data)
+            except Exception as e:
+                print("Error occurred:", e)
+                my_output = filename
+                stripped_data = [line.strip('\n') for line in my_output]
+                stripped_data = [line.strip('\t') for line in stripped_data]
+                batch_output.extend(stripped_data)
+
+            if show_graph:
+                progress_bar["value"] = index
+                progress_window.update_idletasks()
+
+    if show_graph:
+        progress_window.destroy()
+
+    output_file_path = filedialog.asksaveasfilename(title="Save Combined File As", defaultextension=".txt",
+                                                   filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
+    if output_file_path:
+        batch_output_df = pd.DataFrame(batch_output, columns=['Formatted_Output'])
+        new_row = {"Formatted_Output": "fname,seq,dtime,start,stop,wMean,wMeanG,wMedian,wMinSlope,wMinSlopeG,slope,minSlope"}
+        new_row_df = pd.DataFrame([new_row])
+        batch_output_df = pd.concat([new_row_df, batch_output_df], ignore_index=True)
+        batch_output_df.to_csv(output_file_path, index=False, header=False, sep='\t')
+
+    tk.messagebox.showinfo(message=f"Files processed: {len(files)}")
+
+##############
+#    process_auto_start
+#       to be called when button pressed
+#       starts threading so the GUI can be updated with progress message and the output window is updated as files are processed
+#    Parameters:
+#    - everything needed for process_auto_batch_2 to work
+#    - show_graph must be True to show the progress bar
+# 
+#   Returns:
+#    - None
+#########
+def process_auto_start(calibration, calibration_user_entered_values, output_frame_text, show_graph=True):
+    processing_thread = threading.Thread(target=process_auto_batch_2, args=(calibration, calibration_user_entered_values, output_frame_text, show_graph))
+    processing_thread.start()
+
+
+
