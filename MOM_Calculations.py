@@ -144,6 +144,7 @@ def w_mean(dat, calibration, start_index, end_index, baseline):
     calibrated_weight = (measure_mean - baseline) * calibration.regression_gradient + calibration.regression_intercept
     # Get the slope of the segment and calibrate to y-axis grams
     calibrated_slope = fit_slope(dat, start_index, end_index) * calibration.regression_gradient
+
     return calibrated_weight, calibrated_slope
 
 #######
@@ -350,3 +351,98 @@ def w_linear_model(W3, W4):
     wt = W3*0.37074 + W4*0.32060 + 15.88565
     
     return wt
+
+
+#######
+# Function w_Rtn_Diagnostics
+#   Calculates the following from a section of data defined by start_index, end_index 
+#       STD
+#       Mean
+#       # pts above/below mean
+#       # pts > XSD above/below mean 
+#       # pts below the baseline value
+#       # longest stretch above/below mean
+# Parameters:
+#   dat         - full loadcell dataframe (pandas Dataframe of form Measurement | Datetime)
+#   start_index - start point for bird activity in the trace (int)
+#   end_index   - end point for bird activity in the trace (int)
+#   baseline    - baseline value near bird activity for calibration (float)
+#   XSTED       - number of STD above/below baseline for calculation of instability
+# Returns: 
+#   STD, PctAbove/Below Mean, PctAbove/Below XSD, Pts_Below_Baseline, Longest Stretch above/below mean
+#######
+def w_Rtn_Diagnostics(dat, start_index, end_index, baseline, XSTD):
+
+    # Isolate the trace segment
+    trace_segment = dat.loc[start_index:end_index, "Measure"]
+    
+    # Convert to numpy array for efficient calculations
+    my_numpy_array = trace_segment.to_numpy()
+    
+    # Adjust the array by subtracting the baseline
+    my_adjusted_array = my_numpy_array - baseline
+
+    # Get the mean and standard deviation of the adjusted array
+    adjusted_mean = my_adjusted_array.mean()
+    adjusted_STD = my_adjusted_array.std()
+
+    # Calculate points below the baseline (from original array, before adjustment)
+    below_baseline = my_numpy_array < 0 # these are below baseline since baseline was subtracted from numpy_array
+    measure_below_baseline = below_baseline.sum()
+
+    # Calculate points above and below the mean using the adjusted array
+    points_above_mean = (my_adjusted_array > adjusted_mean).sum()
+    points_below_mean = (my_adjusted_array < adjusted_mean).sum()
+
+    # Calculate points above and below XSTD deviations from the mean in the adjusted array
+    points_above_XSTD = (my_adjusted_array > (adjusted_mean + XSTD * adjusted_STD)).sum()
+    points_below_XSTD = (my_adjusted_array < (adjusted_mean - XSTD * adjusted_STD)).sum()
+
+    # Define a function to calculate the longest stretch of points above or below the mean
+    def longest_stretch(arr, condition):
+        max_stretch = 0
+        current_stretch = 0
+        for val in arr:
+            if condition(val):
+                current_stretch += 1
+                max_stretch = max(max_stretch, current_stretch)
+            else:
+                current_stretch = 0
+        return max_stretch
+
+    # Calculate the longest stretch above and below the mean using the adjusted array
+    longest_above_mean = longest_stretch(my_adjusted_array, lambda x: x > adjusted_mean)
+    longest_below_mean = longest_stretch(my_adjusted_array, lambda x: x < adjusted_mean)
+
+    # prep a string for export
+    d_nX = XSTD
+    d_STD = round(adjusted_STD, 2)
+    d_PctAboveMean = round(points_above_mean / len(my_adjusted_array) * 100, 2)
+    d_PctBelowMean = round(points_below_mean / len(my_adjusted_array) * 100, 2)
+    d_PctAboveXSTD = round(points_above_XSTD / len(my_adjusted_array) * 100, 2)
+    d_PctBelowXSTD = round(points_below_XSTD / len(my_adjusted_array) * 100, 2)
+    d_PtsBelowBaseline = measure_below_baseline
+    d_LongestAboveMean = longest_above_mean
+    d_LongestBelowMean = longest_below_mean
+
+    print("******* XSTD")
+    print(XSTD)
+    print("******* d_nX")
+    print("d_nX")
+    print("***** ***")
+
+    if True:
+        # return 9 values for diagnostics d_STD, d_PctAbove, d_PctBelow, d_PctAboveX, d_Pct_BelowX, d_PctBelowBase, d_PctAboveBase, d_LongAbove, d_LongBelow 
+        return d_nX, d_STD, d_PctAboveMean, d_PctBelowMean, d_PctAboveXSTD, d_PctBelowXSTD, d_PtsBelowBaseline, d_LongestAboveMean, d_LongestBelowMean
+    else:
+                
+        return {  # Return the required diagnostics based on the adjusted array just to print
+            "STD": round(adjusted_STD, 2),
+            "PctAboveMean": round(points_above_mean / len(my_adjusted_array) * 100, 2),
+            "PctBelowMean": round(points_below_mean / len(my_adjusted_array) * 100, 2),
+            "PctAboveXSTD": round(points_above_XSTD / len(my_adjusted_array) * 100, 2),
+            "PctBelowXSTD": round(points_below_XSTD / len(my_adjusted_array) * 100, 2),
+            "PtsBelowBaseline": measure_below_baseline,
+            "LongestAboveMean": longest_above_mean,
+            "LongestBelowMean": longest_below_mean
+        }
