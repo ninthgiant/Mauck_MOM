@@ -179,6 +179,22 @@ def output_error(e, output_frame_text):
     output_frame_text.configure(state="disabled")
 
 #######
+# Function output_error
+#   Write error information to GUI text frame
+# Parameters:
+#   output_frame_text - tkinter output text widget frame for writing (tkinter.Text)
+# Returns: None
+def output_to_screen(output_string, output_frame_text):
+    # Configure the regular font to stay consistent across machines
+    output_frame_text.tag_configure("regular", font=("TkDefaultFont", 10))
+    # Set frame to writable state
+    output_frame_text.configure(state="normal")
+    # Write formatted calibration regression information
+    output_frame_text.insert("end", "\t" + output_string + "\n", "regular")
+    # Set frame back to read-only state
+    output_frame_text.configure(state="disabled")
+
+#######
 # Function output_calibration
 #   Write initialized calibration information to GUI text frame
 #   NOTE does not check if calibration is initialized, this should happen before calling
@@ -199,6 +215,7 @@ def output_calibration(calibration, output_frame_text):
     output_frame_text.insert("end", output_string, "regular")
     # Set frame back to read-only state
     output_frame_text.configure(state="disabled")
+
 
 #######
 # Function output_weights
@@ -257,10 +274,13 @@ def output_weights(f_name, counter, datetime,
         ### create simipler output for screen which already has all the information not related to weight
 
         screen_string = ""
-        screen_string = screen_string +  "\tTrace: {counter},\tW2: {wMeanG},\tMedian: {wMedian},\tMin Slope: {wMinSlope}\n".format(counter=counter,
+        screen_string = screen_string +  "\tTrace: {counter},\tTime: {dtime},\tWeight: {wMinSlopeG}\n".format(counter=counter,
                                                                                                                                                         wMeanG=round(weight_mean_gravity, 2),
-                                                                                                                                                        wMedian=round(weight_median,1),
-                                                                                                                                                        wMinSlope=round(weight_min_slope,1))
+                                                                                                                                                        dtime=datetime,
+                                                                                                                                                        wMinSlopeG=round(weight_min_slope_gravity,1))
+        # screen_string = screen_string +  "\tTrace: {counter},\Weight: {wMinSlopeG}\n".format(counter=counter, wMinSlopeG=round(weight_min_slope_gravity,1))
+        screen_string = output_string + screen_string
+
         # Configure the regular font to stay consistent across machines    
         output_frame_text.tag_configure("regular", font=("TkDefaultFont", 10))
         # Set frame to writable state
@@ -304,7 +324,7 @@ def output_weights(f_name, counter, datetime,
                                                                                                                                                         )
 
     # Output if we want to show the diagnostic statistics
-    if True:
+    if False:
         output_string = diag_string
         print("******** diagnostic string")
         print(output_string)
@@ -657,10 +677,11 @@ def run_weights(dat, calibration,
                                              include_header=include_header,
                                              write_output_to_screen=write_output_to_screen)
     
-    print("*************")
-    print("output string in runwts")
-    print(formatted_output_string)
-    print("*************")
+    if False:
+        print("*************")
+        print("output string in runwts")
+        print(formatted_output_string)
+        print("*************")
     
     # if you wanted to save ethis string, you could save the return value from this function
     if False:
@@ -938,14 +959,15 @@ def process_auto_batch(calibration, calibration_user_entered_values, output_fram
 #   calibration_user_entered_values - tkinter text input frames to update initial calibration values (list of tkinter.Entry)
 #   output_frame_text               - tkinter output text widget frame for writing (tkinter.Text)
 # Returns:
-#   calibration object, uninitialized or initialized (MOM_Calculations.Calibration) or None, if user calibration failed 
+#   calibration object, uninitialized or initialized (NONE), if user calibration failed, and T/F is initialized, T/F if R2 good
 #######
 def run_auto_calibration(dat, calibration, calibration_user_entered_values, output_frame_text):
 
     if not calibration.set_true(*[entry.get() for entry in calibration_user_entered_values]):
         output_error("ERROR invalid calibration input value", output_frame_text)
         # We return without an initialized calibration object if this failed
-        return
+        return None, False  # Return indicating failure, the second value isn't really needed
+
 
     # Conduct calibrations
     calibration_true_values = calibration.get_true()
@@ -960,7 +982,8 @@ def run_auto_calibration(dat, calibration, calibration_user_entered_values, outp
     calibration_difference_values = calibration.get_difference()
     calibration_regressed_values = [x * calibration.regression_gradient + calibration.regression_intercept for x in calibration_difference_values]
 
-    # check for a good calibration
+    # check for a good calibration - Check the R² value of the regression
+    is_good_r_squared = calibration.regression_rsquared > 0.99999
 
     if(False):  # do not plot the fit
         # Second, plotting the calibrations for user confirmation 
@@ -974,7 +997,7 @@ def run_auto_calibration(dat, calibration, calibration_user_entered_values, outp
                                                                                 i=round(calibration.regression_intercept,5)))
         plt.show()
 
-    return calibration
+    return calibration, is_good_r_squared
 
 
 ############################
@@ -1350,9 +1373,17 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
     # Write the initial processing output to GUI text widget
     output_header(dat, f_name, "AUTO PROCESSING", output_frame_text)
 
-    calibration = run_auto_calibration(dat, calibration, calibration_user_entered_values, output_frame_text)
+    calibration, good_R2 = run_auto_calibration(dat, calibration, calibration_user_entered_values, output_frame_text)
     if calibration is None or not calibration.initialized:
-        return
+        print("Calibration failed. Invalid calibration object.")
+        # messagebox.showerror("Calibration Error", "Calibration failed. Invalid calibration object.")
+        return None
+    elif not good_R2:
+        print("Calibration unsuccessful with a bad R² value.")
+        # messagebox.showerror("Calibration Error", "Calibration failed with a low R2.")
+        return None
+    else:
+        print("Calibration succeeded.")
 
     # Output calibration info to GUI
     output_calibration(calibration, output_frame_text)
@@ -1683,7 +1714,11 @@ def process_auto_batch_2(calibration, calibration_user_entered_values, output_fr
     if show_graph:
         progress_bar, progress_label, current_item_label, filename_label = create_progress_window(len(files), on_close)
 
-    column_names = ["Filename", "Sequence", "DateTime", "Start_pt", "End_pt", "W1", "W2", "W3", "W4", "W5", "Intcpt", "Slope"]
+    # use the appropriate header
+    if False:
+        column_names = ["Filename", "Sequence", "DateTime", "Start_pt", "End_pt", "W1", "W2", "W3", "W4", "W5", "Intcpt", "Slope"]
+    else:
+        column_names = ["Filename", "Sequence", "DateTime", "Stop_pt", "Start_pt", "W1", "W2", "W3", "W4", "W5", "Intcpt", "Slope","Nstd","Std","PctAbove","PctBelow","PctBelowXstd","PctAboveXstd","PctBelowBaseine","LongRunAbove","LongRunBelow"]
     batch_output = []
 
     valid_extensions = ('.txt', '.csv', '.TXT', '.CSV')
@@ -1704,15 +1739,22 @@ def process_auto_batch_2(calibration, calibration_user_entered_values, output_fr
             try:
                 # Assuming auto_one_file is a function that processes the file
                 my_output = auto_one_file(f_path, calibration, calibration_user_entered_values, output_frame_text, False)
-                stripped_data = [line.strip('\n') for line in my_output]
-                stripped_data = [line.strip('\t') for line in stripped_data]
+                if my_output:
+                        # Strip newlines and tabs from the output if calibration was successful
+                    stripped_data = [line.strip('\n').strip('\t') for line in my_output]
+                else:
+                    # If calibration was bad, log the file name with "Bad Calibration"
+                    stripped_data = [f_path + " Bad Calibration"]
+                    output_error(stripped_data, output_frame_text)
+                
+                # Extend batch_output with the processed or error data
                 batch_output.extend(stripped_data)
             except Exception as e:
                 print("Error occurred:", e)
-                my_output = filename
-                stripped_data = [line.strip('\n') for line in my_output]
-                stripped_data = [line.strip('\t') for line in stripped_data]
-                batch_output.extend(stripped_data)
+                my_output = filename + " - redo manually"
+                print(my_output)
+                output_to_screen(my_output, output_frame_text)
+                batch_output.extend([my_output])
 
             if show_graph:
                 progress_bar["value"] = index
@@ -1725,7 +1767,10 @@ def process_auto_batch_2(calibration, calibration_user_entered_values, output_fr
                                                    filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
     if output_file_path:
         batch_output_df = pd.DataFrame(batch_output, columns=['Formatted_Output'])
-        new_row = {"Formatted_Output": "fname,seq,dtime,start,stop,wMean,wMeanG,wMedian,wMinSlope,wMinSlopeG,slope,minSlope"}
+        if False: # true when no diagnostics are printed
+            new_row = {"Formatted_Output": "fname,seq,dtime,start,stop,wMean,wMeanG,wMedian,wMinSlope,wMinSlopeG,slope,minSlope"}
+        else:
+            new_row =  {"Formatted_Output": "File,Trace_Segment_Num,DateTime,stop,start,Wt_Mean,Wt_MeanG,Wt_Median,Wt_Min_Slope,Wt_Liam,Slope,Min_Slope,d_nXSTD,d_STD,d_PctAbove,d_PctBelow,d_PctAboveX,d_PctBelowX,d_PctBelowBase,d_LongAbove,d_LongBelow"}
         new_row_df = pd.DataFrame([new_row])
         batch_output_df = pd.concat([new_row_df, batch_output_df], ignore_index=True)
         batch_output_df.to_csv(output_file_path, index=False, header=False, sep='\t')

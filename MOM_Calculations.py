@@ -370,6 +370,7 @@ def w_linear_model(W3, W4):
 #   XSTED       - number of STD above/below baseline for calculation of instability
 # Returns: 
 #   STD, PctAbove/Below Mean, PctAbove/Below XSD, Pts_Below_Baseline, Longest Stretch above/below mean
+#       Change Pts_Below_Baseline to reflect Points below the equivalent of 10g - get the regression for this so can calculate that
 #######
 def w_Rtn_Diagnostics(dat, start_index, end_index, baseline, XSTD):
 
@@ -425,11 +426,12 @@ def w_Rtn_Diagnostics(dat, start_index, end_index, baseline, XSTD):
     d_LongestAboveMean = longest_above_mean
     d_LongestBelowMean = longest_below_mean
 
-    print("******* XSTD")
-    print(XSTD)
-    print("******* d_nX")
-    print("d_nX")
-    print("***** ***")
+    if False:
+        print("******* XSTD")
+        print(XSTD)
+        print("******* d_nX")
+        print("d_nX")
+        print("***** ***")
 
     if True:
         # return 9 values for diagnostics d_STD, d_PctAbove, d_PctBelow, d_PctAboveX, d_Pct_BelowX, d_PctBelowBase, d_PctAboveBase, d_LongAbove, d_LongBelow 
