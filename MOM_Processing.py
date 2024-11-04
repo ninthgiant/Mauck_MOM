@@ -257,29 +257,27 @@ def output_weights(f_name, counter, datetime,
     # Format data for CSV output
     # NOTE header line appended just before string here, if it's been added to output_string already
     output_string = output_string + "\t{fname},{counter},{dtime},{samples},{samplesMinSlope},{wMean},{wMeanG},{wMedian},{wMinSlope},{wMinSlopeG},{slope},{minSlope}\n".format(fname=f_name, 
-                                                                                                                                                        counter=counter,
-                                                                                                                                                        dtime=datetime,
-                                                                                                                                                        samples=(end_index-start_index+1),
-                                                                                                                                                        samplesMinSlope=(window_end_index-window_start_index+1),
-                                                                                                                                                        wMean=round(weight_mean, 2),
-                                                                                                                                                        wMeanG=round(weight_mean_gravity, 2),
-                                                                                                                                                        wMedian=round(weight_median,2),
-                                                                                                                                                        wMinSlope=round(weight_min_slope,2),
-                                                                                                                                                        wMinSlopeG=round(weight_min_slope_gravity,2),
-                                                                                                                                                        slope=round(slope,6),
-                                                                                                                                                        minSlope=round(min_slope,6))
+                                                                                                                                                                              counter=counter,
+                                                                                                                                                                              dtime=datetime,
+                                                                                                                                                                              samples=(end_index-start_index+1),
+                                                                                                                                                                              samplesMinSlope=(window_end_index-window_start_index+1),
+                                                                                                                                                                              wMean=round(weight_mean, 2),
+                                                                                                                                                                              wMeanG=round(weight_mean_gravity, 2),
+                                                                                                                                                                              wMedian=round(weight_median,2),
+                                                                                                                                                                              wMinSlope=round(weight_min_slope,2),
+                                                                                                                                                                              wMinSlopeG=round(weight_min_slope_gravity,2),
+                                                                                                                                                                              slope=round(slope,6),
+                                                                                                                                                                              minSlope=round(min_slope,6))
     
     # If requested, write to GUI screen
     if write_output_to_screen:
         ### create simipler output for screen which already has all the information not related to weight
 
-        screen_string = ""
-        screen_string = screen_string +  "\tTrace: {counter},\tTime: {dtime},\tWeight: {wMinSlopeG}\n".format(counter=counter,
-                                                                                                                                                        wMeanG=round(weight_mean_gravity, 2),
-                                                                                                                                                        dtime=datetime,
-                                                                                                                                                        wMinSlopeG=round(weight_min_slope_gravity,1))
+        screen_string = "\tTrace: {counter},\tTime: {dtime},\tWeight: {wMinSlopeG}\n".format(counter=counter,
+                                                                                             dtime=datetime,
+                                                                                             wMinSlopeG=round(weight_min_slope_gravity,2))
         # screen_string = screen_string +  "\tTrace: {counter},\Weight: {wMinSlopeG}\n".format(counter=counter, wMinSlopeG=round(weight_min_slope_gravity,1))
-        screen_string = output_string + screen_string
+        screen_string = screen_string + output_string
 
         # Configure the regular font to stay consistent across machines    
         output_frame_text.tag_configure("regular", font=("TkDefaultFont", 10))
@@ -299,29 +297,27 @@ def output_weights(f_name, counter, datetime,
             diag_string = "\tFile,Trace_Segment_Num,Datetime,Samples,Sample_Min_Slope,Weight_Mean,Weight_Median,Weight_Min_Slope,Slope,Min_Slope,d_nXSTD,d_STD,d_PctAbove,d_PctBelow,d_PctAboveX,d_PctBelowX,d_PctBelowBase,d_LongAbove,d_LongBelow\n"
 
         diag_string = diag_string + "\t{fname},{counter},{dtime},{samples},{samplesMinSlope},{wMean},{wMeanG},{wMedian},{wMinSlope},{wMinSlopeG},{slope},{minSlope},{d_nXSTD},{d_STD},{d_PctAbove},{d_PctBelow},{d_PctAboveX},{d_Pct_BelowX},{d_PctBelowBase},{d_LongAbove},{d_LongBelow}\n".format(fname=f_name, 
-                                                                                                                                                        counter=counter,
-                                                                                                                                                        dtime=datetime,
-                                                                                                                                                        samples=(end_index-start_index+1),
-                                                                                                                                                        samplesMinSlope=(window_end_index-window_start_index+1),
-                                                                                                                                                        wMean=round(weight_mean, 2),
-                                                                                                                                                        wMeanG=round(weight_mean_gravity, 2),
-                                                                                                                                                        wMedian=round(weight_median,2),
-                                                                                                                                                        wMinSlope=round(weight_min_slope,2),
-                                                                                                                                                        wMinSlopeG=round(weight_min_slope_gravity,2),
-                                                                                                                                                        slope=round(slope,6),
-                                                                                                                                                        minSlope=round(min_slope,6),
-                                                                                                                                                        
-                                                                                                                                                        d_nXSTD = d_nXSTD, 
-                                                                                                                                                        d_STD = d_STD, 
-                                                                                                                                                        d_PctAbove = d_PctAbove, 
-                                                                                                                                                        d_PctBelow = d_PctBelow, 
-                                                                                                                                                        d_PctAboveX = d_PctAboveX, 
-                                                                                                                                                        d_Pct_BelowX = d_Pct_BelowX, 
-                                                                                                                                                        d_PctBelowBase = d_PctBelowBase, 
-                                                                                                                                                        d_LongAbove = d_LongAbove, 
-                                                                                                                                                        d_LongBelow = d_LongBelow
-                                                                                                                                                        
-                                                                                                                                                        )
+                                                                                                                                                                                                                                                                                                    counter=counter,
+                                                                                                                                                                                                                                                                                                    dtime=datetime,
+                                                                                                                                                                                                                                                                                                    samples=(end_index-start_index+1),
+                                                                                                                                                                                                                                                                                                    samplesMinSlope=(window_end_index-window_start_index+1),
+                                                                                                                                                                                                                                                                                                    wMean=round(weight_mean, 2),
+                                                                                                                                                                                                                                                                                                    wMeanG=round(weight_mean_gravity, 2),
+                                                                                                                                                                                                                                                                                                    wMedian=round(weight_median,2),
+                                                                                                                                                                                                                                                                                                    wMinSlope=round(weight_min_slope,2),
+                                                                                                                                                                                                                                                                                                    wMinSlopeG=round(weight_min_slope_gravity,2),
+                                                                                                                                                                                                                                                                                                    slope=round(slope,6),
+                                                                                                                                                                                                                                                                                                    minSlope=round(min_slope,6),
+                                                                                                                                                                                                                                                                                                    d_nXSTD = d_nXSTD, 
+                                                                                                                                                                                                                                                                                                    d_STD = d_STD, 
+                                                                                                                                                                                                                                                                                                    d_PctAbove = d_PctAbove, 
+                                                                                                                                                                                                                                                                                                    d_PctBelow = d_PctBelow, 
+                                                                                                                                                                                                                                                                                                    d_PctAboveX = d_PctAboveX, 
+                                                                                                                                                                                                                                                                                                    d_Pct_BelowX = d_Pct_BelowX, 
+                                                                                                                                                                                                                                                                                                    d_PctBelowBase = d_PctBelowBase, 
+                                                                                                                                                                                                                                                                                                    d_LongAbove = d_LongAbove, 
+                                                                                                                                                                                                                                                                                                    d_LongBelow = d_LongBelow
+                                                                                                                                                                                                                                                                                                    )
 
     # Output if we want to show the diagnostic statistics
     if False:
@@ -638,13 +634,12 @@ def run_weights(dat, calibration,
     weight_mean_gravity = MOM_Calculations.w_adjust_for_gravity(weight_mean, slope)
     weight_median, _ = MOM_Calculations.w_median(dat, calibration, start_index, end_index, baseline_mean)
     weight_min_slope, min_slope, window_start_index, window_end_index = MOM_Calculations.w_windowed_min_slope(dat, calibration, start_index-10, end_index+10, baseline_mean, 25, 0.7)
-    weight_min_slope_gravity = MOM_Calculations.w_linear_model(weight_min_slope, weight_median)
+    weight_min_slope_gravity = MOM_Calculations.w_adjust_for_gravity(weight_min_slope, min_slope)
 
     if True:  # run diagnostics only as needed
         d_nXSTD, d_STD, d_PctAbove, d_PctBelow, d_PctAboveX, d_Pct_BelowX, d_PctBelowBase, d_LongAbove, d_LongBelow = MOM_Calculations.w_Rtn_Diagnostics(dat, start_index, end_index, baseline_mean, 3)
         # print(diag_info)
         #XSTD, d_STD, d_PctAboveMean, d_PctBelowMean, d_PctAboveXSTD, d_PctBelowXSTD, d_PctBelowBaseline, d_PctAboveBaseline, d_LongestAboveMean, d_LongestBelowMean
-
 
     # Datetime of the center of the trace segment
     datetime = dat.loc[int((start_index+end_index)/2), "Datetime"]
@@ -798,8 +793,6 @@ def process_manual(calibration, calibration_user_entered_values, output_frame_te
                         include_header=bird_counter==1,
                         output_frame_text=output_frame_text,
                         write_output_to_screen=True)
-            
-
             
             # If we've successfully run the weights, we're on to the next bird
             bird_counter = bird_counter + 1
@@ -1320,7 +1313,6 @@ def find_calibration_flats(measure_series, start_pt, stop_pt, min_len, min_thres
         print("Filtered DataFrame after mean_val threshold filter:")
         print(filtered_df.head())
 
-
     if not filtered_df.empty:
         min_abs_slope_mean = filtered_df['mean_val'].mean() 
         # Find the index of the row with the minimum 'slope_abs'
@@ -1335,7 +1327,6 @@ def find_calibration_flats(measure_series, start_pt, stop_pt, min_len, min_thres
             print(f"\nMean Value of the minimum absolute slope value row ({min_abs_slope_mean}):")
         return round(min_abs_slope_mean,1), min_slope, v_start, total_len
     
-
     else: # CLEAN this- flag a bad calibration
         # mb.showinfo("Cannot auto-calibrate. R2 = ", str(cal_r_squared) + ". NOT GOOD.")
         print("\nFiltered DataFrame is empty.")
@@ -1528,37 +1519,32 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
         wt_info = run_weights(dat, calibration, start_peak_index, end_peak_index, local_baseline, f_name, trace_counter, output_frame_text, include_header=False, write_output_to_screen=True)
         
         # add the weight info to the output to be saved
-        # Append the formatted string to the list, but only if it is the 3rd one or later. The first 2 were used in the calibration
-        # If we want to check for accuracy, could keep these - change to >0 if you want to check for process
-        if(trace_counter > 2):
-            formatted_output.append(wt_info)
-            ### debug
-            ### print(diag_info)
+        formatted_output.append(wt_info)
 
-        # increment the trace
-        trace_counter = trace_counter + 1
-        
-        
-
-        # get the 11th value to put toward the graphing
-        values = wt_info.split(',')
-        if len(values) >= 11:
-            weight_min_slope_value = values[10].strip()
-            measure = float(weight_min_slope_value)  # Convert to float
-        else:
-            measure = 0
-
+        # Organize the text annotations for the final trace graph
         if (show_graph):
-            # This is all for plotting
             peak_markers_x.append(start_peak_index)
             peak_markers_x.append(end_peak_index)
             peak_markers_y.append(dat.loc[start_peak_index, "Measure"])
             peak_markers_y.append(dat.loc[end_peak_index, "Measure"])
             measure_centers_x.append(measure_center)
             measure_centers_y.append(dat.loc[measure_center, "Measure"])
-            measure = 0
-            measures.append(round(measure, 2))
-    
+
+            # get the 10th value (weight_min_slope_gravity) to put toward the graphing
+            values = wt_info.split(',')
+            if len(values) >= 10:
+                weight_min_slope_gravity = values[9].strip()
+                measure = round(float(weight_min_slope_gravity), 2) # Convert to float and round
+        
+            else:
+                measure = 0
+
+            # Append the value labeled by the trace counter
+            measures.append(str(trace_counter) + ": " + str(measure))
+
+        # increment the trace
+        trace_counter = trace_counter + 1
+
     if (show_graph):
         # ------------------
         # This is all just plotting
@@ -1566,8 +1552,8 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
         peak_markers = pd.DataFrame({"x":peak_markers_x,
                                     "y":peak_markers_y})
         measure_labels = pd.DataFrame({"x":measure_centers_x,
-                                    "y":measure_centers_y,
-                                    "label":[str(x) for x in measures]})
+                                      "y":measure_centers_y,
+                                      "label":measures})
         
         plt.ion()
         fig, (ax1, ax2) = plt.subplots(nrows=2, sharex=True)
@@ -1576,9 +1562,9 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
         ax1.scatter(peak_markers["x"].astype(float), peak_markers["y"].astype(float), color="red")
         for i in range(len(measure_labels)):
             ax1.text(measure_labels["x"].astype(float).iloc[i], 
-                    measure_labels["y"].astype(float).iloc[i], 
-                    measure_labels["label"].iloc[i], 
-                    color="red", horizontalalignment="center")
+                     measure_labels["y"].astype(float).iloc[i], 
+                     measure_labels["label"].iloc[i], 
+                     color="red", horizontalalignment="center")
 
         # Currently just show plot the user and exit
         ax2.plot(threshed, "r")
@@ -1791,6 +1777,3 @@ def process_auto_batch_2(calibration, calibration_user_entered_values, output_fr
 def process_auto_start(calibration, calibration_user_entered_values, output_frame_text, show_graph=True):
     processing_thread = threading.Thread(target=process_auto_batch_2, args=(calibration, calibration_user_entered_values, output_frame_text, show_graph))
     processing_thread.start()
-
-
-
