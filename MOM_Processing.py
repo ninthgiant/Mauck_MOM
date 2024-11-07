@@ -252,7 +252,7 @@ def output_weights(f_name, counter, datetime,
 
     # Add CSV header line before data line, if requested  
     if include_header:
-        output_string = "\tFile,Trace_Segment_Num,Datetime,Samples,Sample_Min_Slope,Weight_Mean,Weight_Median,Weight_Min_Slope,Slope,Min_Slope\n"
+        output_string = "\tFile,Trace_Segment_Num,Datetime,Samples,Sample_Min_Slope,Weight_Mean,Weight_Mean_Gravity,Weight_Median,Weight_Min_Slope,Weight_Min_Slope_Gravity,Slope,Min_Slope\n"
 
     # Format data for CSV output
     # NOTE header line appended just before string here, if it's been added to output_string already
