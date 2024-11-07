@@ -799,7 +799,6 @@ def process_manual(calibration, calibration_user_entered_values, output_frame_te
         else:
             break
 
-
 #######
 # ************************IN PROGRESS************************************
 # Function process_auto[CORE OPERATION]
@@ -961,7 +960,6 @@ def run_auto_calibration(dat, calibration, calibration_user_entered_values, outp
         # We return without an initialized calibration object if this failed
         return None, False  # Return indicating failure, the second value isn't really needed
 
-
     # Conduct calibrations
     calibration_true_values = calibration.get_true()
 
@@ -1041,7 +1039,6 @@ def get_auto_calibration_values(dataframe, baseline_fraction=0.0003, num_section
     if do_print:
         print(f"Length of results dataframe: {len(results)}")
 
-      
     # Find the index of the row with the lowest mean and lowest variation
     min_mean_index = results['Mean'].idxmin()
     min_std_index = results['Std'].idxmin()
@@ -1152,11 +1149,16 @@ def get_auto_calibration_values(dataframe, baseline_fraction=0.0003, num_section
 #       window size - how many points need to be level for us to use this as a baseline   
 #   returns: Mean baseline value, all_good a flag to say that min mean and min std weren't the same
 #######
-def get_bird_baseline(my_bird_df, start_index, stop_index, buffer_size=800, window_size=40):
+def get_bird_baseline(my_bird_df, start_index, stop_index, buffer_size=300, window_size=40):
 
-        # Define new indices before and after the focal trace by adding/subtracting the buffer
+    # Define new indices before and after the focal trace by adding/subtracting the buffer
     new_start_index = start_index - buffer_size
     new_stop_index = stop_index + buffer_size
+
+    if new_start_index < 0:
+        new_start_index = 0
+    if new_stop_index > len(my_bird_df):
+        new_stop_index = len(my_bird_df)
 
     # Create subsets before and after the specified indices
     subset_before = my_bird_df.iloc[new_start_index:start_index]
@@ -1508,14 +1510,13 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
         measure_center = int((start_peak_index + end_peak_index) / 2)
 
         # CHANGE 8/30/24 - GET the LOCAL BASELINE VALUE HERE
-        local_baseline, good_flag = get_bird_baseline(dat, start_peak_index, end_peak_index, buffer_size=800, window_size=40)
+        local_baseline, good_flag = get_bird_baseline(dat, start_peak_index, end_peak_index, buffer_size=300, window_size=40)
 
         # Find the weight within the window
         # NOTE you could call run_weights() here, like in process_manual
         #      For doing a batch of files, you could call run_weights() and store the csv-formatted output strings
         # measure, _, _, _ = MOM_Calculations.w_windowed_min_slope_mid(dat, calibration, start_peak_index, end_peak_index, local_baseline)
         # measure, _, _, _ = MOM_Calculations.w_windowed_min_slope(dat, calibration, start_peak_index, end_peak_index, local_baseline)
-
         wt_info = run_weights(dat, calibration, start_peak_index, end_peak_index, local_baseline, f_name, trace_counter, output_frame_text, include_header=False, write_output_to_screen=True)
         
         # add the weight info to the output to be saved
