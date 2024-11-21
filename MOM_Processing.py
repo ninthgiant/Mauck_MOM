@@ -162,7 +162,7 @@ def output_header(dat, f_name, header_label, output_frame_text):
     output_frame_text.configure(state="disabled")
 
 #######
-# Function output_header
+# Function output_error
 #   Write an error message to GUI text frame
 # Parameters:
 #   e                 - error text (str)
@@ -179,7 +179,7 @@ def output_error(e, output_frame_text):
     output_frame_text.configure(state="disabled")
 
 #######
-# Function output_error
+# Function output_to_screen
 #   Write error information to GUI text frame
 # Parameters:
 #   output_frame_text - tkinter output text widget frame for writing (tkinter.Text)
@@ -218,6 +218,30 @@ def output_calibration(calibration, output_frame_text):
 
 
 #######
+# Function return_header
+#   Single Function to encapsulate all header value, 
+#   11/15/24:
+#       include weights adjusted for gravity from run_wts
+# NOTE rounding only happens here!
+# Parameters:
+#   header_type  - standard without diagnostics, diagnostic adds fields               
+# Returns: 
+#   Formatted CSV line (str) for that header type
+#######
+def return_header(header_type):
+
+    match header_type:
+        case "standard":
+            return "\tFile,Trace#,dtTime,Pts_All,Pts_Min,Wt_Mean,Wt_Mn_Grav,Wt_Med,Wt_Min_Slope,Wt_Min_Grav,Slope,Min_Slope,Start_All,End_All,Start_Win,End_Win,Baseline, r2, Cal_Slope, Cal_Intcpt\n"
+        case "diagnostic":
+            return "\tFile,Trace#,dtTime,Pts_All,Pts_Min,Wt_Mean,Wt_Mn_Grav,Wt_Med,Wt_Min_Slope,Wt_Min_Grav,Slope,Min_Slope,d_nXSTD,d_STD,d_PctAbove,d_PctBelow,d_PctAboveX,d_PctBelowX,d_PctBelowBase,d_LongAbove,d_LongBelow\n"
+        case "none":
+            return ""
+        case _:
+            return "\tFile,Trace#,dtTime,Pts_All,Pts_Min,Wt_Mean,Wt_Mn_Grav,Wt_Med,Wt_Min_Slope,Wt_Min_Grav,Slope,Min_Slope,Start_All,End_All,Start_Win,Start_End,Baseline\n"
+
+    
+#######
 # Function output_weights
 #   Format CSV line for multiple weight measurement values
 #   with OPTION to write to GUI
@@ -247,16 +271,16 @@ def output_weights(f_name, counter, datetime,
                    baseline_mean, d_nXSTD, d_STD, d_PctAbove, d_PctBelow, d_PctAboveX, d_Pct_BelowX, d_PctBelowBase, d_LongAbove, d_LongBelow,
                    slope, min_slope,
                    output_frame_text, 
-                   include_header=False, write_output_to_screen=True):
+                   include_header=False, write_output_to_screen=True, output_diagnostic=False):
     output_string = ""
 
     # Add CSV header line before data line, if requested  
     if include_header:
-        output_string = "\tFile,Trace_Segment_Num,Datetime,Samples,Sample_Min_Slope,Weight_Mean,Weight_Mean_Gravity,Weight_Median,Weight_Min_Slope,Weight_Min_Slope_Gravity,Slope,Min_Slope,Start_Index,End_Index,Window_Start_Index,Window_End_Index,Baseline_Mean\n"
+        output_string = return_header("standard")
 
     # Format data for CSV output
     # NOTE header line appended just before string here, if it's been added to output_string already
-    output_string = output_string + "\t{fname},{counter},{dtime},{samples},{samplesMinSlope},{wMean},{wMeanG},{wMedian},{wMinSlope},{wMinSlopeG},{slope},{minSlope},{startIndex},{endIndex},{windowStartIndex},{windowEndIndex},{baselineMean}\n".format(fname=f_name, 
+    output_string = output_string + "\t{fname},{counter},{dtime},{samples},{samplesMinSlope},{wMean},{wMeanG},{wMedian},{wMinSlope},{wMinSlopeG},{slope},{minSlope},{startIndex},{endIndex},{windowStartIndex},{windowEndIndex},{baselineMean}, {d_nXSTD},{d_STD},{d_PctAbove}\n".format(fname=f_name, 
                                                                                                                                                                                                                                                          counter=counter,
                                                                                                                                                                                                                                                          dtime=datetime,
                                                                                                                                                                                                                                                          samples=(end_index-start_index+1),
@@ -272,7 +296,10 @@ def output_weights(f_name, counter, datetime,
                                                                                                                                                                                                                                                          endIndex=end_index,
                                                                                                                                                                                                                                                          windowStartIndex=window_start_index,
                                                                                                                                                                                                                                                          windowEndIndex=window_end_index,
-                                                                                                                                                                                                                                                         baselineMean=baseline_mean)
+                                                                                                                                                                                                                                                         baselineMean=baseline_mean,
+                                                                                                                                                                                                                                                         d_nXSTD=d_nXSTD,
+                                                                                                                                                                                                                                                         d_STD = d_STD,
+                                                                                                                                                                                                                                                         d_PctAbove = d_PctAbove)
     
     # If requested, write to GUI screen
     if write_output_to_screen:
@@ -293,15 +320,16 @@ def output_weights(f_name, counter, datetime,
         # Set frame back to read-only state
         output_frame_text.configure(state="disabled")
         
-    if True:
+    if output_diagnostic == True:
         #output withe diagnostics
-        diag_string = ""
+        output_string = ""
         
         # Add CSV header line before data line, if requested  
         if include_header:
-            diag_string = "\tFile,Trace_Segment_Num,Datetime,Samples,Sample_Min_Slope,Weight_Mean,Weight_Median,Weight_Min_Slope,Slope,Min_Slope,d_nXSTD,d_STD,d_PctAbove,d_PctBelow,d_PctAboveX,d_PctBelowX,d_PctBelowBase,d_LongAbove,d_LongBelow\n"
+            output_string = return_header("diagnostic")
+            # diag_string = "\tFile,Trace_Segment_Num,Datetime,Samples,Sample_Min_Slope,Weight_Mean,Weight_Median,Weight_Min_Slope,Slope,Min_Slope,d_nXSTD,d_STD,d_PctAbove,d_PctBelow,d_PctAboveX,d_PctBelowX,d_PctBelowBase,d_LongAbove,d_LongBelow\n"
 
-        diag_string = diag_string + "\t{fname},{counter},{dtime},{samples},{samplesMinSlope},{wMean},{wMeanG},{wMedian},{wMinSlope},{wMinSlopeG},{slope},{minSlope},{d_nXSTD},{d_STD},{d_PctAbove},{d_PctBelow},{d_PctAboveX},{d_Pct_BelowX},{d_PctBelowBase},{d_LongAbove},{d_LongBelow}\n".format(fname=f_name, 
+        output_string = output_string + "\t{fname},{counter},{dtime},{samples},{samplesMinSlope},{wMean},{wMeanG},{wMedian},{wMinSlope},{wMinSlopeG},{slope},{minSlope},{d_nXSTD},{d_STD},{d_PctAbove},{d_PctBelow},{d_PctAboveX},{d_Pct_BelowX},{d_PctBelowBase},{d_LongAbove},{d_LongBelow}\n".format(fname=f_name, 
                                                                                                                                                                                                                                                                                                     counter=counter,
                                                                                                                                                                                                                                                                                                     dtime=datetime,
                                                                                                                                                                                                                                                                                                     samples=(end_index-start_index+1),
@@ -323,12 +351,6 @@ def output_weights(f_name, counter, datetime,
                                                                                                                                                                                                                                                                                                     d_LongAbove = d_LongAbove, 
                                                                                                                                                                                                                                                                                                     d_LongBelow = d_LongBelow
                                                                                                                                                                                                                                                                                                     )
-
-    # Output if we want to show the diagnostic statistics
-    if False:
-        output_string = diag_string
-        print("******** diagnostic string")
-        print(output_string)
 
     # Return the formatted string, even if we did not write to GUI
     return output_string
@@ -632,7 +654,7 @@ def run_weights(dat, calibration,
                 baseline_mean, 
                 f_name, counter, 
                 output_frame_text, 
-                include_header=False, write_output_to_screen=True):
+                include_header=False, write_output_to_screen=True, do_diagnostic = False):
     
     # Call weight calculation functions
     weight_mean, slope = MOM_Calculations.w_mean(dat, calibration, start_index, end_index, baseline_mean)
@@ -641,10 +663,13 @@ def run_weights(dat, calibration,
     weight_min_slope, min_slope, window_start_index, window_end_index = MOM_Calculations.w_windowed_min_slope(dat, calibration, start_index-10, end_index+10, baseline_mean, 25, 0.7)
     weight_min_slope_gravity = MOM_Calculations.w_adjust_for_gravity(weight_min_slope, min_slope)
 
-    if True:  # run diagnostics only as needed
+    if do_diagnostic:  # run diagnostics only as needed
         d_nXSTD, d_STD, d_PctAbove, d_PctBelow, d_PctAboveX, d_Pct_BelowX, d_PctBelowBase, d_LongAbove, d_LongBelow = MOM_Calculations.w_Rtn_Diagnostics(dat, start_index, end_index, baseline_mean, 3)
-        # print(diag_info)
-        #XSTD, d_STD, d_PctAboveMean, d_PctBelowMean, d_PctAboveXSTD, d_PctBelowXSTD, d_PctBelowBaseline, d_PctAboveBaseline, d_LongestAboveMean, d_LongestBelowMean
+    else:
+        d_nXSTD = round(calibration.regression_rsquared,5)
+        d_STD = round(calibration.regression_gradient,5)
+        d_PctAbove = round(calibration.regression_intercept,5)
+        d_PctBelow = d_PctAboveX = d_Pct_BelowX = d_PctBelowBase = d_LongAbove = d_LongBelow = 0
 
     # Datetime of the center of the trace segment
     datetime = dat.loc[int((start_index+end_index)/2), "Datetime"]
@@ -678,11 +703,6 @@ def run_weights(dat, calibration,
                                              include_header=include_header,
                                              write_output_to_screen=write_output_to_screen)
     
-    if False:
-        print("*************")
-        print("output string in runwts")
-        print(formatted_output_string)
-        print("*************")
     
     # if you wanted to save ethis string, you could save the return value from this function
     if False:
@@ -836,6 +856,9 @@ def process_auto(calibration, calibration_user_entered_values, output_frame_text
     f_path = get_user_file()
 
     if(True):
+        my_header = "Header above auto output"
+        my_header = return_header("standard")
+        output_to_screen(my_header, output_frame_text)
         my_output = auto_one_file(f_path, calibration, calibration_user_entered_values, output_frame_text, show_graph = True)
 
 
@@ -1528,7 +1551,8 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
         # add the weight info to the output to be saved
         formatted_output.append(wt_info)
 
-        # Organize the text annotations for the final trace graph
+        # Organize the tex
+        # t annotations for the final trace graph
         if (show_graph):
             peak_markers_x.append(start_peak_index)
             peak_markers_x.append(end_peak_index)
@@ -1685,6 +1709,9 @@ def on_close():
 #    - None; this outputs all the data to the screen and to a text file
 #########
 def process_auto_batch_2(calibration, calibration_user_entered_values, output_frame_text, show_graph=True):
+
+    no_diagnostics = True
+
     global stop_processing, progress_window
 
     stop_processing = False
@@ -1708,10 +1735,10 @@ def process_auto_batch_2(calibration, calibration_user_entered_values, output_fr
         progress_bar, progress_label, current_item_label, filename_label = create_progress_window(len(files), on_close)
 
     # use the appropriate header
-    if False:
-        column_names = ["Filename", "Sequence", "DateTime", "Start_pt", "End_pt", "W1", "W2", "W3", "W4", "W5", "Intcpt", "Slope"]
+    if no_diagnostics:
+        column_names = ["File", "Trace_Num_Sequence", "DateTime", "Start_pt", "End_pt", "W1", "W2", "W3", "W4", "W5", "Intcpt", "Slope"]
     else:
-        column_names = ["Filename", "Sequence", "DateTime", "Stop_pt", "Start_pt", "W1", "W2", "W3", "W4", "W5", "Intcpt", "Slope","Nstd","Std","PctAbove","PctBelow","PctBelowXstd","PctAboveXstd","PctBelowBaseine","LongRunAbove","LongRunBelow"]
+        column_names = ["File", "Trace_Num_Sequence", "DateTime", "Stop_pt", "Start_pt", "W1", "W2", "W3", "W4", "W5", "Intcpt", "Slope","Nstd","Std","PctAbove","PctBelow","PctBelowXstd","PctAboveXstd","PctBelowBaseine","LongRunAbove","LongRunBelow"]
     batch_output = []
 
     valid_extensions = ('.txt', '.csv', '.TXT', '.CSV')
@@ -1760,10 +1787,12 @@ def process_auto_batch_2(calibration, calibration_user_entered_values, output_fr
                                                    filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
     if output_file_path:
         batch_output_df = pd.DataFrame(batch_output, columns=['Formatted_Output'])
-        if False: # true when no diagnostics are printed
-            new_row = {"Formatted_Output": "fname,seq,dtime,start,stop,wMean,wMeanG,wMedian,wMinSlope,wMinSlopeG,slope,minSlope"}
+        if no_diagnostics: # true when no diagnostics are printed
+            new_row = return_header("standard")
+            # new_row = {"Formatted_Output": "fname,seq,dtime,start,stop,wMean,wMeanG,wMedian,wMinSlope,wMinSlopeG,slope,minSlope"}
         else:
-            new_row =  {"Formatted_Output": "File,Trace_Segment_Num,DateTime,stop,start,Wt_Mean,Wt_MeanG,Wt_Median,Wt_Min_Slope,Wt_Liam,Slope,Min_Slope,d_nXSTD,d_STD,d_PctAbove,d_PctBelow,d_PctAboveX,d_PctBelowX,d_PctBelowBase,d_LongAbove,d_LongBelow"}
+            new_row = return_header("diagnostic")
+            # new_row =  {"Formatted_Output": "File,Trace_Segment_Num,DateTime,Win_All,Win_Slope,Wt_Mean,Wt_MeanG,Wt_Median,Wt_Min_Slope,Wt_Min_Grav,Slope,Min_Slope,All_Start,All_End,Min_Start,Min_End,Baseline,Type,Method,Notes"}
         new_row_df = pd.DataFrame([new_row])
         batch_output_df = pd.concat([new_row_df, batch_output_df], ignore_index=True)
         batch_output_df.to_csv(output_file_path, index=False, header=False, sep='\t')
