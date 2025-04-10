@@ -7,10 +7,12 @@
 #       CHANGES: 9/1/2024
 #           Add button for batch auto processing
 #           Add function def: setup_gui() to properlyl handle GUI
+#       CHANGES: 12/6/2024
+#           Change Auto button to perform Duration calculations - change in list of button names and call to method
 #######################################
 #######################################
 
-VERSION = "V11(2024-11-08)"
+VERSION = "v12(2024-12-07)"
 
 #######################################
 #######################################
@@ -42,7 +44,14 @@ INPUT_PAD_Y = 20
 BUTTON_PAD_X = 5
 BUTTON_PAD_Y = 5
 BUTTON_WIDTH = 20
-BUTTON_LABELS = ["View", "Manual", "Automatic", "Auto Batch"]
+
+# Which interface to use
+use_Duration = False
+
+if use_Duration:
+    BUTTON_LABELS = ["View", "Manual", "Duration", "Auto Batch"]
+else:
+    BUTTON_LABELS = ["View", "Manual", "Automatic", "Auto Batch"]
 
 # Output frames
 OUTPUT_FRAME_WIDTH = 400
@@ -94,8 +103,13 @@ def setup_gui():
     button_manual.pack(side=tk.LEFT, padx=BUTTON_PAD_X, pady=BUTTON_PAD_Y)
     buttons.append(button_manual)
 
-    # Auto button calls MOM_Processing.process_auto()
-    button_auto = tk.Button(button_frame, text=BUTTON_LABELS[2], command=lambda: MOM_Processing.process_auto(calibration, calibration_user_entered_values, output_frame_text))
+    if not use_Duration:
+        # Auto button calls MOM_Processing.process_auto()
+        button_auto = tk.Button(button_frame, text=BUTTON_LABELS[2], command=lambda: MOM_Processing.process_auto(calibration, calibration_user_entered_values, output_frame_text))
+    else:
+        # Auto button now calls MOM_Processing.view("duration")
+        button_auto = tk.Button(button_frame, text=BUTTON_LABELS[2], command=lambda: MOM_Processing.view(output_frame_text, "duration"))
+
     button_auto.pack(side=tk.LEFT, padx=BUTTON_PAD_X, pady=BUTTON_PAD_Y)
     buttons.append(button_auto)
 
@@ -103,6 +117,12 @@ def setup_gui():
     button_auto_batch = tk.Button(button_frame, text=BUTTON_LABELS[3], command=lambda: MOM_Processing.process_auto_start(calibration, calibration_user_entered_values, output_frame_text, show_graph=True))
     button_auto_batch.pack(side=tk.LEFT, padx=BUTTON_PAD_X, pady=BUTTON_PAD_Y)
     buttons.append(button_auto_batch)
+
+    # Add a Trim button - calls MOM_Processing.trim()- NEW FEATURE
+    button_trim = tk.Button(button_frame, text="Trim", command=lambda: MOM_Processing.trim())
+    button_trim.pack(side=tk.LEFT, padx=BUTTON_PAD_X, pady=BUTTON_PAD_Y)
+    buttons.append(button_trim)
+
 
     # Output frame with text widget
     output_frame = tk.Frame(root, width=OUTPUT_FRAME_WIDTH, height=OUTPUT_FRAME_HEIGHT, bd=0, relief=tk.SOLID)

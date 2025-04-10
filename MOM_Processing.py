@@ -232,7 +232,7 @@ def return_header(header_type):
 
     match header_type:
         case "standard":
-            return "\tFile,Trace#,dtTime,Pts_All,Pts_Min,Wt_Mean,Wt_Mn_Grav,Wt_Med,Wt_Min_Slope,Wt_Min_Grav,Slope,Min_Slope,Start_All,End_All,Start_Win,End_Win,Baseline, r2, Cal_Slope, Cal_Intcpt\n"
+            return "\tFile,Trace#,dtTime,Pts_All,Pts_Min,Wt_Mean,Wt_Mn_Grav,Wt_Med,Wt_Min_Slope,Wt_Min_Grav,Slope,Min_Slope,Start_All,End_All,Start_Win,End_Win,Baseline,r2,Cal_Slope,Cal_Intcpt\n"
         case "diagnostic":
             return "\tFile,Trace#,dtTime,Pts_All,Pts_Min,Wt_Mean,Wt_Mn_Grav,Wt_Med,Wt_Min_Slope,Wt_Min_Grav,Slope,Min_Slope,d_nXSTD,d_STD,d_PctAbove,d_PctBelow,d_PctAboveX,d_PctBelowX,d_PctBelowBase,d_LongAbove,d_LongBelow\n"
         case "none":
@@ -713,11 +713,12 @@ def run_weights(dat, calibration,
 #######
 # Function view [CORE OPERATION]
 #   View a strain trace file as an interactive pyplot figure
+#   CHANGE 12/6/2024 - add parameter to perform more than just viewing - category = "view" is the default and keeps original function
 # Parameters:
 #   output_frame_text - tkinter output text widget frame for writing (tkinter.Text)
 # Returns: None
 #######
-def view(output_frame_text):
+def view(output_frame_text, category = "view"):
 
     # User selects file
     f_path = get_user_file()
@@ -735,12 +736,23 @@ def view(output_frame_text):
     # Write the initial processing output to GUI text widget
     output_header(dat, f_name, "VIEWING", output_frame_text)
 
-    # Plot
-    fig, ax = plt.subplots()
-    fig.set_size_inches((PLOT_VIEWER_WIDTH, PLOT_VIEWER_HEIGHT))
-    ax.plot(dat.loc[:,"Measure"])
-    ax.set_title(os.path.splitext(f_name)[0])
-    plt.show()
+    if category == "duration":
+        # this works, now decide wehre to call it from... 12/6/2024
+        while (True):
+            if messagebox.askyesno("Confirmation", "Measure trace duration?"):
+                my_dur_output = Do_Bird_Characteristics(dat)
+                output_to_screen(my_dur_output, output_frame_text) 
+            else:
+                break
+    
+    else:
+        # Plot only and have a look around
+        fig, ax = plt.subplots()
+        fig.set_size_inches((PLOT_VIEWER_WIDTH, PLOT_VIEWER_HEIGHT))
+        ax.plot(dat.loc[:,"Measure"])
+        ax.set_title(os.path.splitext(f_name)[0])
+        plt.show()
+    
 
 #######
 # Function process_manual [CORE OPERATION]
@@ -1773,7 +1785,7 @@ def process_auto_batch_2(calibration, calibration_user_entered_values, output_fr
                 print("Error occurred:", e)
                 my_output = filename + " - redo manually"
                 print(my_output)
-                output_to_screen(my_output, output_frame_text)
+                output_to_screen(my_output, output_frame_text) 
                 batch_output.extend([my_output])
 
             if show_graph:
@@ -1813,3 +1825,149 @@ def process_auto_batch_2(calibration, calibration_user_entered_values, output_fr
 def process_auto_start(calibration, calibration_user_entered_values, output_frame_text, show_graph=True):
     processing_thread = threading.Thread(target=process_auto_batch_2, args=(calibration, calibration_user_entered_values, output_frame_text, show_graph))
     processing_thread.start()
+
+    ##############
+#    trim
+#       to be called when button pressed
+#       lets user find file, open file, save only relevant points to another file
+#       removes all the background data from an all night file
+#    Parameters:
+#    - nothing
+# 
+#   Returns:
+#    - None
+#########
+def trim():
+
+        # User selects file
+    f_path = get_user_file()
+
+    # Parse data from the file and return a dataframe
+    dat = parse_trace_file(f_path)
+
+    thresh = find_threshold(dat)
+
+    ### alternative - threshold_STD
+    threshold_STD = 1000
+
+    print("Threshold: "+ "\t" + str(thresh)) # based on looking at actual data - baseline  usually below 500, but this makes it more conservative
+
+    # Initialize an empty list to store the slices that meet the condition
+    valid_slices = []
+
+    # Define the slice size
+    slice_size = 600  #300 is what is happening with the Arduino right now (2025 April)
+
+    # Total number of rows in the dataframe
+    total_rows = len(dat)
+
+    # Iterate through the dataframe in slices of 300 rows
+    for start_idx in range(0, total_rows, slice_size):
+        end_idx = min(start_idx + slice_size, total_rows)  # Ensure we don't exceed the total rows
+        
+        # Get the current slice of the 'Measure' column
+        slice_data = dat.loc[start_idx:end_idx - 1, "Measure"]
+        
+        if(False):
+            # Check if the max value in this slice exceeds the threshold - works for old data, but not for new data (i.e., Arduino collection)
+            if slice_data.max() > thresh:
+                # If it does, add the entire slice to the valid_slices list
+                valid_slices.append(dat.loc[start_idx:end_idx - 1])
+        else:
+            # use the STD to check for a big change up or down - if only baseline, will be fine
+            if slice_data.std() > threshold_STD:
+                # If it does, add the entire slice to the valid_slices list
+                valid_slices.append(dat.loc[start_idx:end_idx - 1])
+            
+    # Concatenate all valid slices into a single DataFrame and reset the index, just in case
+    valid_data = pd.concat(valid_slices, ignore_index=True)
+    valid_data.reset_index(drop=True, inplace=True)
+
+    # Convert 'DateTime' to UNIX time (seconds since the Unix epoch)
+    valid_data['UnixTime'] = pd.to_datetime(valid_data['Datetime']).astype('int64') // 10**9
+
+    # Drop the old 'DateTime' column and rename the 'Unix column for that' - maybe not needed
+    valid_data.drop(columns=['Datetime'], inplace=True)
+    valid_data.rename(columns={'UnixTime': 'Datetime'}, inplace=True)
+
+    output_file_path = filedialog.asksaveasfilename(title="Save Shortened File As", defaultextension=".txt",
+                                                   filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
+    if output_file_path:
+        valid_data.to_csv(output_file_path, index=False, header = False)  # Save as CSV, change the file path/extension as needed
+            
+
+############################
+# Function find_threshold 
+#
+####
+def find_threshold(dat):
+    # give space
+    print("")
+     # Calculate mean value for the entire file - will be overwhelmingly valued to by the baseline
+    measure_mean = dat["Measure"].mean()
+    print("Mean File:" + "\t" + str(measure_mean))
+
+    # Calculate mean value for the midpoint and assume you don't have a bird there, OK?
+    total_rows = len(dat)
+
+    if total_rows > 5000:
+        # Calculate mean for the center slice (2000 rows centered on midpoint)
+        midpoint = total_rows // 2
+        slice_start = max(midpoint - 1000, 0)  # Avoid going below 0
+        slice_end = min(midpoint + 1000, total_rows)  # Avoid exceeding DataFrame length
+        center_mean = dat.loc[slice_start:slice_end, "Measure"].mean()
+        # print("Mean Center:" + "\t" + str(center_mean))
+        
+        # Calculate mean for the quarter slice (2000 rows centered on the first quarter)
+        qtrpoint = total_rows // 4
+        slice_start = max(qtrpoint - 1000, 0)  # Avoid going below 0
+        slice_end = min(qtrpoint + 1000, total_rows)  # Avoid exceeding DataFrame length
+        qtr_mean = dat.loc[slice_start:slice_end, "Measure"].mean()
+        # print("Mean Quarter:" + "\t" + str(qtr_mean))
+
+        # Calculate mean for the three-quarter slice (2000 rows centered on the third quarter)
+        threeqtrpoint = total_rows * 3 // 4
+        slice_start = max(threeqtrpoint - 1000, 0)  # Avoid going below 0
+        slice_end = min(threeqtrpoint + 1000, total_rows)  # Avoid exceeding DataFrame length
+        threeqtr_mean = dat.loc[slice_start:slice_end, "Measure"].mean()
+        # print("3/4 Mean:" + "\t" + str(threeqtr_mean))
+
+        # Calculate the minimum value of the three means
+        min_mean = min(measure_mean, center_mean, qtr_mean, threeqtr_mean)
+        # print("Minimum of the Means:" + "\t" + str(min_mean))
+
+        # approximate value of the 16g weight - anything over this we keep 300 pts ahead and behind
+        min_threshold = min_mean + min_mean * 0.003
+
+        return min_threshold
+
+    else:
+        print("DataFrame has fewer than 5000 rows.")
+
+#############################
+# Function Do_Bird_Characteristics: get an In and Out quality for bird trip - to evaluate MOM performance
+#    Choose start and stop when baseline begins/ends disturbance
+#       Data to gather - start time, start point, points between markers
+#           additional may want in the future: symmetrical, reliablity score?
+#    RAM 7/25/22
+#    parameters: dataframe with traces 
+#    returns: string to output
+#######
+def Do_Bird_Characteristics(my_DataFrame):
+
+    good, _, bird_value_markers, _ = get_trace_point_pair(my_DataFrame, "Bird[Measure]")
+
+    # Get marked start and end points of bird measurements 
+    bird_start_index = bird_value_markers.index[0]
+    bird_end_index = bird_value_markers.index[1]
+
+    my_Points = bird_end_index - bird_start_index # number of points we have
+    global my_SPS
+    my_SPS = 60
+    my_Span = my_Points/my_SPS
+
+    output_text = "Trace Duration:" + "\t" + str(my_Points) + "pts \t" + str(round(my_Span,1)) + " secs" # add to Text widget
+
+    return(output_text)
+
+    
