@@ -4,6 +4,7 @@
 #       Loadcell (Mass-o-Matic) trace parsing, viewing, and processing
 #       R.A.M and L.U.T.
 #       2024-08-27 cleanup of RAM_v10
+#       2025-04-10 added "Trim" function to remove meaningless datapoints from file - not yet used Dec 9, 2025
 #######################################
 #######################################
 
@@ -309,7 +310,7 @@ def output_weights(f_name, counter, datetime,
                                                                                              dtime=datetime,
                                                                                              wMinSlopeG=round(weight_min_slope_gravity,2))
         # screen_string = screen_string +  "\tTrace: {counter},\Weight: {wMinSlopeG}\n".format(counter=counter, wMinSlopeG=round(weight_min_slope_gravity,1))
-        screen_string = screen_string + output_string
+        screen_string = screen_string ### + output_string
 
         # Configure the regular font to stay consistent across machines    
         output_frame_text.tag_configure("regular", font=("TkDefaultFont", 10))
@@ -1057,15 +1058,18 @@ def get_auto_calibration_values(dataframe, baseline_fraction=0.0003, num_section
  
     if do_print: print("in get_auto_calibration_values")
 
+    #### change the size of hte std threshold
+    std_threshold = 3 * std_threshold
+
     # Slice the first 5000 lines - make this a parameter - 5000 ONLY FOR Calibration does this work!
     if(lines > 0):
-        subset_data = dataframe.head(5000)
+        subset_data = dataframe.head(lines)
     else:
         subset_data = dataframe
     
     # Calculate rolling mean and standard deviation
-    rolling_mean = subset_data['Measure'].rolling(window=window_size).mean()
-    rolling_std = subset_data['Measure'].rolling(window=window_size).std()
+    rolling_mean = subset_data['Measure'].rolling(window=window_size, center=True).mean()
+    rolling_std = subset_data['Measure'].rolling(window=window_size, center=True).std()
     
     # Drop NaN values created by the rolling window
     rolling_mean = rolling_mean.dropna()
@@ -1079,27 +1083,54 @@ def get_auto_calibration_values(dataframe, baseline_fraction=0.0003, num_section
 
     if do_print:
         print(f"Length of results dataframe: {len(results)}")
+        print(results.head(5))
 
     # Find the index of the row with the lowest mean and lowest variation
     min_mean_index = results['Mean'].idxmin()
     min_std_index = results['Std'].idxmin()
 
-    m_value = results.iloc[min_mean_index]['Mean']
-    s_value = results.iloc[min_std_index]['Mean']
+    min_std_value = results.loc[min_std_index, 'Std']
+    std_at_min_mean = results.loc[min_mean_index, 'Std']
+
+    # Symmetry check around the min-mean window: neighbors must be similarly flat
+    # Use a small neighborhood (half-window on each side) and require std within std_threshold of the min std
+    half_w = max(3, window_size // 4)  # small neighborhood, not the whole window
+    def is_symmetrically_flat(idx):
+        left = results.loc[idx - half_w:idx - 1]['Std'] if idx - half_w >= results.index.min() else pd.Series([], dtype=float)
+        right = results.loc[idx + 1:idx + half_w]['Std'] if idx + half_w <= results.index.max() else pd.Series([], dtype=float)
+        if left.empty or right.empty:
+            return False
+        return (left.max() <= min_std_value + std_threshold) and (right.max() <= min_std_value + std_threshold)
+
+    candidate_index = min_mean_index if is_symmetrically_flat(min_mean_index) else None
+
+    if candidate_index is None:
+        # Search nearby for the closest index that passes the symmetry check; tie-break on mean
+        search_radius = max(half_w, 2 * half_w)
+        best = None
+        best_mean = None
+        for idx in range(min_mean_index - search_radius, min_mean_index + search_radius + 1):
+            if idx not in results.index:
+                continue
+            if is_symmetrically_flat(idx):
+                mval = results.loc[idx, 'Mean']
+                if (best is None) or (abs(idx - min_mean_index) < abs(best - min_mean_index)) or (abs(idx - min_mean_index) == abs(best - min_mean_index) and mval < best_mean):
+                    best = idx
+                    best_mean = mval
+        if best is not None:
+            candidate_index = best
+        else:
+            # Fallback: pick the lowest-std index
+            candidate_index = min_std_index
+
+    baseline_index = candidate_index
+    baseline_cal_mean = results.loc[baseline_index, 'Mean']
 
     if do_print:
-        print(f"Mean at min_mean_index {min_mean_index}: {results.iloc[min_mean_index]['Mean']}")
-        print(f"Mean at min_std_index {min_std_index}: {results.iloc[min_std_index]['Mean']}")
-
-    # Check which index satisfies both conditions - use lower value of the two, if needed
-    # baseline_index = min_mean_index if min_std_index == min_mean_index else results['Mean'].idxmin()
-    if (m_value < s_value):
-        baseline_index = min_mean_index
-    else:
-        baseline_index = min_std_index
-
-    # Extract the baseline window
-    baseline_cal_mean= results.iloc[baseline_index]['Mean']
+        print(f"Min mean index: {min_mean_index}, mean: {results.loc[min_mean_index, 'Mean']}")
+        print(f"Min std index: {min_std_index}, std: {min_std_value}")
+        print(f"Std at min_mean_index: {std_at_min_mean}")
+        print(f"Baseline index chosen (symmetry-based): {baseline_index}, mean: {baseline_cal_mean}")
 
     # Define thresholds based on baseline fraction so dont' need user to tell us what is off baseline
     high_threshold = baseline_cal_mean + baseline_fraction * baseline_cal_mean
@@ -1164,6 +1195,13 @@ def get_auto_calibration_values(dataframe, baseline_fraction=0.0003, num_section
             # Plot the raw data with vertical lines for start and stop points
             plt.figure(figsize=(12, 6))
             plt.plot(subset_data['Measure'], label='Raw Data')
+
+            # first plot baseline
+            baseline_start = max(0, baseline_index - window_size + 1)
+            baseline_stop = min(len(subset_data) - 1, baseline_index)
+            plt.axvline(x=baseline_start, color='blue', linestyle=':', label='Baseline start')
+            plt.axvline(x=baseline_stop, color='blue', linestyle='-.', label='Baseline stop')
+            
             
             for _, row in sections_df.iterrows():
                 plt.axvline(x=row['Start'], color='r', linestyle='--', label=f'Start {row.name}')
@@ -1856,7 +1894,7 @@ def trim():
     valid_slices = []
 
     # Define the slice size
-    slice_size = 600  #300 is what is happening with the Arduino right now (2025 April)
+    slice_size = 2000 # 600 worked well  #300 is what is happening with the Arduino right now (2025 April)
 
     # Total number of rows in the dataframe
     total_rows = len(dat)
