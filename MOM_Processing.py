@@ -214,6 +214,10 @@ def output_calibration(calibration, output_frame_text):
                                                                                                        i=round(calibration.regression_intercept,5),
                                                                                                        s=round(calibration.regression_gradient,5))
     output_frame_text.insert("end", output_string, "regular")
+
+    # Add line for header for values:
+    output_string = "\tTrace\tWeight\tDur(s)\tTime\n"
+    output_frame_text.insert("end", output_string, "regular")
     # Set frame back to read-only state
     output_frame_text.configure(state="disabled")
 
@@ -238,6 +242,8 @@ def return_header(header_type):
             return "\tFile,Trace#,dtTime,Pts_All,Pts_Min,Wt_Mean,Wt_Mn_Grav,Wt_Med,Wt_Min_Slope,Wt_Min_Grav,Slope,Min_Slope,d_nXSTD,d_STD,d_PctAbove,d_PctBelow,d_PctAboveX,d_PctBelowX,d_PctBelowBase,d_LongAbove,d_LongBelow\n"
         case "none":
             return ""
+        case "short":
+            return "\tFile,Trace#,dtTime,Pts_All,Pts_Calc,Wt_Min_Grav\n"
         case _:
             return "\tFile,Trace#,dtTime,Pts_All,Pts_Min,Wt_Mean,Wt_Mn_Grav,Wt_Med,Wt_Min_Slope,Wt_Min_Grav,Slope,Min_Slope,Start_All,End_All,Start_Win,Start_End,Baseline\n"
 
@@ -272,43 +278,61 @@ def output_weights(f_name, counter, datetime,
                    baseline_mean, d_nXSTD, d_STD, d_PctAbove, d_PctBelow, d_PctAboveX, d_Pct_BelowX, d_PctBelowBase, d_LongAbove, d_LongBelow,
                    slope, min_slope,
                    output_frame_text, 
-                   include_header=False, write_output_to_screen=True, output_diagnostic=False):
+                   include_header=False, write_output_to_screen=True, output_diagnostic=False, output_long=False):
     output_string = ""
 
     # Add CSV header line before data line, if requested  
     if include_header:
-        output_string = return_header("standard")
+        if output_long:
+            output_string = return_header("standard")
+        else:
+            output_string = return_header("short")
 
-    # Format data for CSV output
-    # NOTE header line appended just before string here, if it's been added to output_string already
-    output_string = output_string + "\t{fname},{counter},{dtime},{samples},{samplesMinSlope},{wMean},{wMeanG},{wMedian},{wMinSlope},{wMinSlopeG},{slope},{minSlope},{startIndex},{endIndex},{windowStartIndex},{windowEndIndex},{baselineMean}, {d_nXSTD},{d_STD},{d_PctAbove}\n".format(fname=f_name, 
-                                                                                                                                                                                                                                                         counter=counter,
-                                                                                                                                                                                                                                                         dtime=datetime,
-                                                                                                                                                                                                                                                         samples=(end_index-start_index+1),
-                                                                                                                                                                                                                                                         samplesMinSlope=(window_end_index-window_start_index+1),
-                                                                                                                                                                                                                                                         wMean=round(weight_mean, 2),
-                                                                                                                                                                                                                                                         wMeanG=round(weight_mean_gravity, 2),
-                                                                                                                                                                                                                                                         wMedian=round(weight_median,2),
-                                                                                                                                                                                                                                                         wMinSlope=round(weight_min_slope,2),
-                                                                                                                                                                                                                                                         wMinSlopeG=round(weight_min_slope_gravity,2),
-                                                                                                                                                                                                                                                         slope=round(slope,6),
-                                                                                                                                                                                                                                                         minSlope=round(min_slope,6),
-                                                                                                                                                                                                                                                         startIndex=start_index,
-                                                                                                                                                                                                                                                         endIndex=end_index,
-                                                                                                                                                                                                                                                         windowStartIndex=window_start_index,
-                                                                                                                                                                                                                                                         windowEndIndex=window_end_index,
-                                                                                                                                                                                                                                                         baselineMean=baseline_mean,
-                                                                                                                                                                                                                                                         d_nXSTD=d_nXSTD,
-                                                                                                                                                                                                                                                         d_STD = d_STD,
-                                                                                                                                                                                                                                                         d_PctAbove = d_PctAbove)
-    
+    if output_long:  # Format data for CSV output
+         # NOTE header line appended just before string here, if it's been added to output_string already
+        output_string = output_string + "\t{fname},{counter},{dtime},{samples},{samplesMinSlope},{wMean},{wMeanG},{wMedian},{wMinSlope},{wMinSlopeG},{slope},{minSlope},{startIndex},{endIndex},{windowStartIndex},{windowEndIndex},{baselineMean}, {d_nXSTD},{d_STD},{d_PctAbove}\n".format(fname=f_name, 
+                                                                                                                                                                                                                                                            counter=counter,
+                                                                                                                                                                                                                                                            dtime=datetime,
+                                                                                                                                                                                                                                                            samples=(end_index-start_index+1),
+                                                                                                                                                                                                                                                            samplesMinSlope=(window_end_index-window_start_index+1),
+                                                                                                                                                                                                                                                            wMean=round(weight_mean, 2),
+                                                                                                                                                                                                                                                            wMeanG=round(weight_mean_gravity, 2),
+                                                                                                                                                                                                                                                            wMedian=round(weight_median,2),
+                                                                                                                                                                                                                                                            wMinSlope=round(weight_min_slope,2),
+                                                                                                                                                                                                                                                            wMinSlopeG=round(weight_min_slope_gravity,2),
+                                                                                                                                                                                                                                                            slope=round(slope,6),
+                                                                                                                                                                                                                                                            minSlope=round(min_slope,6),
+                                                                                                                                                                                                                                                            startIndex=start_index,
+                                                                                                                                                                                                                                                            endIndex=end_index,
+                                                                                                                                                                                                                                                            windowStartIndex=window_start_index,
+                                                                                                                                                                                                                                                            windowEndIndex=window_end_index,
+                                                                                                                                                                                                                                                            baselineMean=baseline_mean,
+                                                                                                                                                                                                                                                            d_nXSTD=d_nXSTD,
+                                                                                                                                                                                                                                                            d_STD = d_STD,
+                                                                                                                                                                                                                                                            d_PctAbove = d_PctAbove)
+       
+    else: # Format data for CSV output - short version
+        output_string = output_string + "\t{fname},{counter},{dtime},{samples},{samplesMinSlope},{wMinSlopeG}\n".format(fname=f_name, 
+                                                                                                                        counter=counter,
+                                                                                                                        dtime=datetime,
+                                                                                                                        samples=(end_index-start_index+1),
+                                                                                                                        samplesMinSlope=(window_end_index-window_start_index+1),
+                                                                                                                        wMinSlopeG=round(weight_min_slope_gravity,2)
+                                                                                                                        )
+
+
     # If requested, write to GUI screen
     if write_output_to_screen:
         ### create simipler output for screen which already has all the information not related to weight
 
-        screen_string = "\tTrace: {counter},\tTime: {dtime},\tWeight: {wMinSlopeG}\n".format(counter=counter,
+        screen_string_old = "\tTrace: {counter},\tTime: {dtime},\tWeight: {wMinSlopeG}\n".format(counter=counter,
                                                                                              dtime=datetime,
                                                                                              wMinSlopeG=round(weight_min_slope_gravity,2))
+        screen_string = "\t{counter},\t{wMinSlopeG},\t{duration},\t{dtime}\n".format(counter=counter,
+                                                                                             dtime=datetime,
+                                                                                             duration=round(((end_index - start_index + 1)/60),2),
+                                                                                             wMinSlopeG=round(weight_min_slope_gravity,2))
+
         # screen_string = screen_string +  "\tTrace: {counter},\Weight: {wMinSlopeG}\n".format(counter=counter, wMinSlopeG=round(weight_min_slope_gravity,1))
         screen_string = screen_string ### + output_string
 
@@ -675,35 +699,35 @@ def run_weights(dat, calibration,
     # Datetime of the center of the trace segment
     datetime = dat.loc[int((start_index+end_index)/2), "Datetime"]
 
-    # Return the formatted output string as defined in output_weights
+
+            # Return the formatted output string as defined in output_weights
     formatted_output_string = output_weights(f_name=f_name,
-                                             counter=counter, 
-                                             datetime=datetime, 
-                                             start_index=start_index, 
-                                             end_index=end_index, 
-                                             window_start_index=window_start_index, 
-                                             window_end_index=window_end_index, 
-                                             weight_mean=weight_mean, 
-                                             weight_mean_gravity=weight_mean_gravity,
-                                             weight_median=weight_median,
-                                             weight_min_slope=weight_min_slope,
-                                             weight_min_slope_gravity=weight_min_slope_gravity,
-                                             baseline_mean=baseline_mean,
-                                             d_nXSTD = d_nXSTD, 
-                                             d_STD = d_STD, 
-                                             d_PctAbove = d_PctAbove, 
-                                             d_PctBelow = d_PctBelow, 
-                                             d_PctAboveX = d_PctAboveX, 
-                                             d_Pct_BelowX = d_Pct_BelowX, 
-                                             d_PctBelowBase = d_PctBelowBase, 
-                                             d_LongAbove = d_LongAbove, 
-                                             d_LongBelow = d_LongBelow,
-                                             slope=slope,
-                                             min_slope=min_slope,
-                                             output_frame_text=output_frame_text,
-                                             include_header=include_header,
-                                             write_output_to_screen=write_output_to_screen)
-    
+                                            counter=counter, 
+                                            datetime=datetime, 
+                                            start_index=start_index, 
+                                            end_index=end_index, 
+                                            window_start_index=window_start_index, 
+                                            window_end_index=window_end_index, 
+                                            weight_mean=weight_mean, 
+                                            weight_mean_gravity=weight_mean_gravity,
+                                            weight_median=weight_median,
+                                            weight_min_slope=weight_min_slope,
+                                            weight_min_slope_gravity=weight_min_slope_gravity,
+                                            baseline_mean=baseline_mean,
+                                            d_nXSTD = d_nXSTD, 
+                                            d_STD = d_STD, 
+                                            d_PctAbove = d_PctAbove, 
+                                            d_PctBelow = d_PctBelow, 
+                                            d_PctAboveX = d_PctAboveX, 
+                                            d_Pct_BelowX = d_Pct_BelowX, 
+                                            d_PctBelowBase = d_PctBelowBase, 
+                                            d_LongAbove = d_LongAbove, 
+                                            d_LongBelow = d_LongBelow,
+                                            slope=slope,
+                                            min_slope=min_slope,
+                                            output_frame_text=output_frame_text,
+                                            include_header=include_header,
+                                            write_output_to_screen=write_output_to_screen)
     
     # if you wanted to save ethis string, you could save the return value from this function
     if False:
@@ -859,7 +883,7 @@ def process_manual(calibration, calibration_user_entered_values, output_frame_te
 #   output_frame_text               - tkinter output text widget frame for writing (tkinter.Text)
 # Returns: None
 #######
-def process_auto(calibration, calibration_user_entered_values, output_frame_text, show_graph = True):
+def process_auto(calibration, calibration_user_entered_values, output_frame_text, show_graph = True, output_long = False):
     
     # ------------------
     # Automatic calibration
@@ -870,8 +894,11 @@ def process_auto(calibration, calibration_user_entered_values, output_frame_text
 
     if(True):
         my_header = "Header above auto output"
-        my_header = return_header("standard")
-        output_to_screen(my_header, output_frame_text)
+        if output_long:
+            my_header2 = return_header("standard")
+        else:
+            my_header2 = return_header("short")
+        # output_to_screen(my_header, output_frame_text)
         my_output = auto_one_file(f_path, calibration, calibration_user_entered_values, output_frame_text, show_graph = True)
 
 
@@ -1758,7 +1785,7 @@ def on_close():
 #   Returns:
 #    - None; this outputs all the data to the screen and to a text file
 #########
-def process_auto_batch_2(calibration, calibration_user_entered_values, output_frame_text, show_graph=True):
+def process_auto_batch_2(calibration, calibration_user_entered_values, output_frame_text, show_graph=True, output_long=False):
 
     no_diagnostics = True
 
@@ -1838,8 +1865,11 @@ def process_auto_batch_2(calibration, calibration_user_entered_values, output_fr
     if output_file_path:
         batch_output_df = pd.DataFrame(batch_output, columns=['Formatted_Output'])
         if no_diagnostics: # true when no diagnostics are printed
-            new_row = return_header("standard")
-            # new_row = {"Formatted_Output": "fname,seq,dtime,start,stop,wMean,wMeanG,wMedian,wMinSlope,wMinSlopeG,slope,minSlope"}
+            if output_long:
+                new_row = return_header("standard")
+            else:
+                new_row = return_header("short")
+                new_row = {"Formatted_Output": "File,Trace,Date,Time,Pts_All,Pts_Calc,Weight"}
         else:
             new_row = return_header("diagnostic")
             # new_row =  {"Formatted_Output": "File,Trace_Segment_Num,DateTime,Win_All,Win_Slope,Wt_Mean,Wt_MeanG,Wt_Median,Wt_Min_Slope,Wt_Min_Grav,Slope,Min_Slope,All_Start,All_End,Min_Start,Min_End,Baseline,Type,Method,Notes"}

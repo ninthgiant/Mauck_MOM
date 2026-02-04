@@ -12,7 +12,8 @@
 #######################################
 #######################################
 
-VERSION = "v12(2024-12-07)"
+# VERSION = "v12(2024-12-07)"
+VERSION = "v13(2026-02-04)"  # updated output formats onscreen and autobatch output file, also adjusted default window size
 
 #######################################
 #######################################
@@ -31,6 +32,7 @@ import MOM_Calculations
 #######################################
 
 # Program screen
+# Minimum size to fall back to if the monitor is small or not yet known.
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 700
 
@@ -63,7 +65,14 @@ def setup_gui():
     # Initialize GUI
     # Root window
     root = tk.Tk()
-    root.geometry(f"{SCREEN_WIDTH}x{SCREEN_HEIGHT}")
+    # Measure the current monitor; prefer half the screen if that is larger than the minimums.
+    myScreen_Width = root.winfo_screenwidth()
+    myScreen_Height = root.winfo_screenheight()
+    window_width = max(SCREEN_WIDTH, myScreen_Width // 2)
+    window_height = max(SCREEN_HEIGHT, myScreen_Height // 2)
+
+    root.geometry(f"{window_width}x{window_height}")
+    root.minsize(SCREEN_WIDTH, SCREEN_HEIGHT)
     root.title("Mass-O-Matic Analyzer " + VERSION)
 
     # Initialize calibrations
