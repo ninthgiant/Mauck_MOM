@@ -14,6 +14,7 @@
 
 # VERSION = "v12(2024-12-07)"
 VERSION = "v13(2026-02-04)"  # updated output formats onscreen and autobatch output file, also adjusted default window size
+VERSION = "v14(2026-02-06)"  # Cleand up Batch code and added a review button to review batch summaries, also added a trim button to trim the data files for better viewing and processing
 
 #######################################
 #######################################
@@ -126,6 +127,11 @@ def setup_gui():
     button_auto_batch = tk.Button(button_frame, text=BUTTON_LABELS[3], command=lambda: MOM_Processing.process_auto_start(calibration, calibration_user_entered_values, output_frame_text, show_graph=True))
     button_auto_batch.pack(side=tk.LEFT, padx=BUTTON_PAD_X, pady=BUTTON_PAD_Y)
     buttons.append(button_auto_batch)
+
+    # Review Batch Summary button
+    button_review = tk.Button(button_frame, text="Review Batch Summary", command=lambda: MOM_Processing.Batch_Review(output_frame_text))
+    button_review.pack(side=tk.LEFT, padx=BUTTON_PAD_X, pady=BUTTON_PAD_Y)
+    buttons.append(button_review)
 
     # Add a Trim button - calls MOM_Processing.trim()- NEW FEATURE
     button_trim = tk.Button(button_frame, text="Trim", command=lambda: MOM_Processing.trim())

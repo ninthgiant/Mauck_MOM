@@ -35,13 +35,22 @@ import MOM_Calculations
 
 #######################################
 #######################################
+# Calculation Parameters
+#######################################
+#######################################
+max_length_secs = 3.4  # maximum length of time (seconds) to allow in automatic processing mode - make this a user preference later
+max_length_auto = 60 *  max_length_secs # maximum number of data points to allow in automatic processing mode - auto_one_file()
+
+
+#######################################
+#######################################
 # I/O Parameters
 #######################################
 #######################################
 input_directory = os.getcwd()
 output_directory = os.getcwd()
 
-PLOT_VIEWER_WIDTH = 10
+PLOT_VIEWER_WIDTH = 15
 PLOT_VIEWER_HEIGHT = 5
 
 #######################################
@@ -79,7 +88,7 @@ def get_user_file():
     # Catch no file selected
     if len(f_path) == 0:
         messagebox.showinfo("Error", "No file chosen. Try again.")
-        return None, None
+        return None
 
     # Update global input directory to call back later
     input_directory = os.path.dirname(f_path)
@@ -194,6 +203,177 @@ def output_to_screen(output_string, output_frame_text):
     output_frame_text.insert("end", "\t" + output_string + "\n", "regular")
     # Set frame back to read-only state
     output_frame_text.configure(state="disabled")
+
+
+#############################
+# Batch_Review
+#   Let the user pick an Overnight batch summary file and show its contents in the GUI
+#############################
+def Batch_Review(output_frame_text):
+    global input_directory
+    # Default filetype fire
+
+    files_types = [('TXT',"*.txt *.TXT"), ('CSV',"*.csv *.CSV")]    
+    
+    # Ask user to select file
+    f_path = filedialog.askopenfilename(initialdir=input_directory,  title="Choose trace file", filetypes=files_types)
+
+    # Catch no file selected
+    if len(f_path) == 0:
+        messagebox.showinfo("Error", "No file chosen. Try again.")
+        return None
+
+    # Update global input directory to call back later
+    input_directory = os.path.dirname(f_path)
+
+    if not os.path.basename(f_path).startswith("Overnight"):
+        messagebox.showinfo("Not an Overnight file", "Please select a file that starts with 'Overnight'.")
+        return None
+
+    current_batch_summary_file = f_path
+
+    # Load the batch file into a DataFrame
+    try:
+        # adjust sep/dtype/header as needed for your file format
+        batch_df = pd.read_csv(
+            f_path,
+            sep="\t",          # or "," if it’s comma‑separated
+            header=None        # set to 0 if the first line is a header
+        )
+    except Exception as e:
+        output_to_screen(f"Error reading batch file: {e}", output_frame_text)
+        return None
+
+    # (Optional) store for later use
+    # self.batch_df = batch_df   # or return it / set a module‑level variable
+
+    output_to_screen(f"Loaded batch file with {len(batch_df)} rows.", output_frame_text)
+    print(batch_df.head(10))  # for debugging, can remove later
+        # Display the dataframe in the GUI output frame (tab‑separated)
+
+    if False:
+        try:
+            output_frame_text.tag_configure("regular", font=("TkDefaultFont", 10))
+            output_frame_text.configure(state="normal")
+            # Create a tab-separated string representation
+            df_str = batch_df.to_csv(sep="\t", index=False, header=True)
+
+            lines = batch_df.to_csv(sep="\t", index=False, header=True).splitlines()
+
+            stripped = [line.strip("\n").strip("\t") for line in lines]
+            output_frame_text.insert("end", "\n".join(stripped) + "\n", "mono")
+            # output_frame_text.insert("end", df_str, "regular")
+            output_frame_text.configure(state="disabled")
+        except Exception as e:
+            output_to_screen(f"Error displaying batch data: {e}", output_frame_text)
+
+    # Build and display batch summary
+    summary_df = Calculate_Batch_Summary(f_path)
+    try:
+        output_frame_text.tag_configure("mono", font=("Courier", 14))
+
+        # Explicit fixed-width formatting for clean alignment
+        headers = ["File", "Lines", "Birds", "Too_Long", "Day_Weights", "Calib_Problem", "Other_Redo_Problem"]
+        widths  = [20,      20,      20,      20,          20,             20,                 20]
+
+        def fmt_row(row):
+            return (
+                f"{str(row['File']):<{widths[0]}}"
+                f"{str(row['Lines']):<{widths[1]}}"
+                f"{str(row['Birds']):<{widths[2]}}"
+                f"{str(row['Too_Long']):<{widths[3]}}"
+                f"{str(row['Day_Weights']):<{widths[4]}}"
+                f"{str(row['Calib_Problem']):<{widths[5]}}"
+                f"{str(row['Other_Redo_Problem']):<{widths[6]}}"
+            )
+
+        header_line = (
+            f"{headers[0]:<{widths[0]}}"
+            f"{headers[1]:<{widths[1]}}"
+            f"{headers[2]:<{widths[2]}}"
+            f"{headers[3]:<{widths[3]}}"
+            f"{headers[4]:<{widths[4]}}"
+            f"{headers[5]:<{widths[5]}}"
+            f"{headers[6]:<{widths[6]}}"
+        )
+
+        body_lines = "\n".join(fmt_row(r) for _, r in summary_df.iterrows())
+        table_str = header_line + "\n" + body_lines
+
+        output_frame_text.configure(state="normal")
+        output_frame_text.insert("end", f"\nSelected file: {os.path.basename(f_path)}\n", "mono")
+        output_frame_text.insert("end", "Batch Summary (per File):\n", "mono")
+        output_frame_text.insert("end", table_str + "\n", "mono")
+        output_frame_text.configure(state="disabled")
+    except Exception as e:
+        output_to_screen(f"Error displaying batch summary: {e}", output_frame_text)
+
+    return f_path
+
+#############################
+# Calculate_Batch_Summary
+#   Minimal version: populate File column from first column of f_path
+#############################
+def Calculate_Batch_Summary(f_path):
+    """
+    Read f_path, treat first column as File (or use existing 'File'),
+    populate Lines and Birds (Birds = rows before 07:00 or after 20:00), and return the dataframe.
+    Qualifying bird rows: time before 07:00 or after 20:00 AND weight > 0.
+    """
+    try:
+        raw_df = pd.read_csv(f_path, sep=None, engine="python")
+    except Exception:
+        raw_df = pd.read_csv(f_path, sep="\t")
+
+    if "File" not in raw_df.columns:
+        raw_df = raw_df.rename(columns={raw_df.columns[0]: "File"})
+
+    # Simple count of lines per File
+    df = raw_df.copy()
+    unique_files = df["File"].dropna().unique()
+
+    line_counts = df.groupby("File").size()
+
+    # Time thresholds
+    Time_AM = 7  # 7:00
+    Time_PM = 20 # 20:00
+
+    # Parse Date column and compute hour
+    if "Date" not in df.columns:
+        raise ValueError("Batch file must contain a 'Date' column with datetime strings.")
+    df["_dt"] = pd.to_datetime(df["Date"], errors="coerce")
+    df["_hour"] = df["_dt"].dt.hour
+
+    bird_mask = (df["_hour"] < Time_AM) | (df["_hour"] >= Time_PM)
+    bird_counts = df[bird_mask].groupby("File").size()
+    day_mask = (df["_hour"] >= Time_AM) & (df["_hour"] < Time_PM)
+    day_counts = df[day_mask].groupby("File").size()
+
+    # Long entries: any field containing "Too_Long" (case-insensitive)
+    long_mask = df.apply(lambda row: row.astype(str).str.contains("too_long", case=False, na=False).any(), axis=1)
+    long_counts = df[long_mask].groupby("File").size()
+
+    # Calibration problems: any field containing "Calib" (case-insensitive)
+    calib_mask = df.apply(lambda row: row.astype(str).str.contains("calib", case=False, na=False).any(), axis=1)
+    calib_counts = df[calib_mask].groupby("File").size()
+
+    # Other problems: any field containing "problem_redo_manually" (case-insensitive)
+    other_mask = df.apply(lambda row: row.astype(str).str.contains("problem_redo_manually", case=False, na=False).any(), axis=1)
+    other_counts = df[other_mask].groupby("File").size()
+
+    Batch_Summary_df = pd.DataFrame({
+        "File": unique_files,
+        "Lines": [int(line_counts.get(f, 0)) for f in unique_files],
+        "Birds": [int(bird_counts.get(f, 0)) for f in unique_files],
+        "Too_Long": [int(long_counts.get(f, 0)) for f in unique_files],
+        "Day_Weights": [int(day_counts.get(f, 0)) for f in unique_files],
+        "Calib_Problem": [int(calib_counts.get(f, 0)) for f in unique_files],
+        "Other_Redo_Problem": [int(other_counts.get(f, 0)) for f in unique_files]
+    })
+
+    print(Batch_Summary_df.head(5))
+    return Batch_Summary_df
+
 
 #######
 # Function output_calibration
@@ -313,12 +493,12 @@ def output_weights(f_name, counter, datetime,
        
     else: # Format data for CSV output - short version
         output_string = output_string + "\t{fname},{counter},{dtime},{samples},{samplesMinSlope},{wMinSlopeG}\n".format(fname=f_name, 
-                                                                                                                        counter=counter,
-                                                                                                                        dtime=datetime,
-                                                                                                                        samples=(end_index-start_index+1),
-                                                                                                                        samplesMinSlope=(window_end_index-window_start_index+1),
-                                                                                                                        wMinSlopeG=round(weight_min_slope_gravity,2)
-                                                                                                                        )
+                                                                                                                       counter=counter,
+                                                                                                                       dtime=datetime,
+                                                                                                                       samples=(end_index-start_index+1),
+                                                                                                                       samplesMinSlope=(window_end_index-window_start_index+1),
+                                                                                                                       wMinSlopeG=round(weight_min_slope_gravity,2)
+                                                                                                                       )
 
 
     # If requested, write to GUI screen
@@ -348,7 +528,8 @@ def output_weights(f_name, counter, datetime,
     if output_diagnostic == True:
         #output withe diagnostics
         output_string = ""
-        
+
+
         # Add CSV header line before data line, if requested  
         if include_header:
             output_string = return_header("diagnostic")
@@ -747,6 +928,8 @@ def view(output_frame_text, category = "view"):
 
     # User selects file
     f_path = get_user_file()
+    if not f_path:
+        return
 
     # Parse data from the file
     dat = parse_trace_file(f_path)
@@ -794,6 +977,8 @@ def process_manual(calibration, calibration_user_entered_values, output_frame_te
     
     # User selects file
     f_path = get_user_file()
+    if not f_path:
+        return
 
     # Parse data from the file
     dat = parse_trace_file(f_path)
@@ -891,6 +1076,8 @@ def process_auto(calibration, calibration_user_entered_values, output_frame_text
 
     # User selects file
     f_path = get_user_file()
+    if not f_path:
+        return
 
     if(True):
         my_header = "Header above auto output"
@@ -911,6 +1098,7 @@ def process_auto(calibration, calibration_user_entered_values, output_frame_text
 #   - User chooses a folder containing all the files to batch process
 #   - Processes each file and saves the returned text info for all the relevant traces on the file
 #   - Only processes files starting with "DL" and ending with "TXT" or "CSV" (and lowercase)
+#   REPLACED BY AUTO_BATCH_2 - this is the original version that just calls auto_one_file for each file, and then combines the output. Auto_batch_2 is a more integrated version that does all the processing within the batch function, which allows for more flexibility and efficiency (e.g., not having to re-parse files multiple times). Keeping this around for now in case we want to pull any code from it, but it will likely be deleted eventually.
 #
 # Parameters:
 #   calibration                     - weight calibration object (MOM_Calculations.Calibration)
@@ -1473,14 +1661,18 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
     output_header(dat, f_name, "AUTO PROCESSING", output_frame_text)
 
     calibration, good_R2 = run_auto_calibration(dat, calibration, calibration_user_entered_values, output_frame_text)
-    if calibration is None or not calibration.initialized:
-        print("Calibration failed. Invalid calibration object.")
-        # messagebox.showerror("Calibration Error", "Calibration failed. Invalid calibration object.")
-        return None
-    elif not good_R2:
-        print("Calibration unsuccessful with a bad R² value.")
-        # messagebox.showerror("Calibration Error", "Calibration failed with a low R2.")
-        return None
+    if calibration is None or not calibration.initialized or not good_R2:
+        print("Calibration failed.")
+        first_time = dat.loc[0, "Datetime"] if len(dat) > 0 else "NA"
+        fail_line = "\t{fname},{counter},{dtime},{samples},{samplesMinSlope},{wMinSlopeG}\n".format(
+            fname=f_name,
+            counter=0,
+            dtime=first_time,
+            samples=0,
+            samplesMinSlope=0,
+            wMinSlopeG="Calibration failed"
+        )
+        return [fail_line]
     else:
         print("Calibration succeeded.")
 
@@ -1577,78 +1769,120 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
     trace_counter = 1
 
     # For each measurement window of 1s, find the peaks and measure within those peaks
+        ### catch too long traces inside here and return an error message if they are too long, 
+
     for start, end in zip(retained_window_starts_indices, retained_window_ends_indices):
-        # Get the measurement data in the window
-        window = dat.loc[start:end, "Measure"]
-        
-        # Get the sign switches at every location in the trace
-        # Start by calculating the rolling difference, like the first derivative: window.diff()
-        #   series [a, b, c] becomes series[NA, b-a, c-b]
-        # Simplify to the sign of the first derivative: np.sign(window.diff())
-        #   increasing = 1, decreasing = -1
-        # Now get the derivative of those signs: np.sign(window.diff()).diff()
-        #   inc->inc =  1 -  1 =  0
-        #   dec->dec = -1 - -1 =  0 
-        #   inc->dec = -1 -  1 = -2
-        #   dec->inc =  1 - -1 =  2
-        # Fill the NA values with 0 
-        # (will be the first values in the Series, because there are no previous values to take differences from with .diff)
-        sign_switches = np.sign(window.diff()).diff().fillna(0)
 
-        # The PEAKS are areas where the trace is going from increasing to decreasing
-        # so find indices in the original trace where the sign_switch is -2
-        # Shift one index to the left to adjust for .diff()
-        peaks = sign_switches[sign_switches == -2].index - 1
+        window_len = end - start + 1    # length of the trace window
+        if window_len < max_length_auto:   # as long as it is not too long, we can process it, otherwise we will ask the user to do it manually
 
-        # Now we are finding the actual measurement window via penguin rule
-        # By default, start with the actual starta nd end value of the window
-        start_peak_index = start
-        end_peak_index = end
+            window = dat.loc[start:end, "Measure"]
+            
+            if(False): ## extended comments
+                pass
+                # Get the sign switches at every location in the trace
+                # Start by calculating the rolling difference, like the first derivative: window.diff()
+                #   series [a, b, c] becomes series[NA, b-a, c-b]
+                # Simplify to the sign of the first derivative: np.sign(window.diff())
+                #   increasing = 1, decreasing = -1
+                # Now get the derivative of those signs: np.sign(window.diff()).diff()
+                #   inc->inc =  1 -  1 =  0
+                #   dec->dec = -1 - -1 =  0 
+                #   inc->dec = -1 -  1 = -2
+                #   dec->inc =  1 - -1 =  2
+                # Fill the NA values with 0 
+                # (will be the first values in the Series, because there are no previous values to take differences from with .diff)
 
-        # If there are 3 or more peaks, take the penguin rule peaks
-        if len(peaks) > 2:
-            # Second peak
-            start_peak_index = peaks[1]
-            # Second-to-last peak
-            end_peak_index = peaks[-2]
+                # The PEAKS are areas where the trace is going from increasing to decreasing
+                # so find indices in the original trace where the sign_switch is -2
+                # Shift one index to the left to adjust for .diff()
 
-        # Find central value of the window
-        measure_center = int((start_peak_index + end_peak_index) / 2)
+                # Now we are finding the actual measurement window via penguin rule
+                # By default, start with the actual starta nd end value of the window
 
-        # CHANGE 8/30/24 - GET the LOCAL BASELINE VALUE HERE
-        local_baseline, good_flag = get_bird_baseline(dat, start_peak_index, end_peak_index, buffer_size=300, window_size=40)
+            sign_switches = np.sign(window.diff()).diff().fillna(0)
 
-        # Find the weight within the window
-        # NOTE you could call run_weights() here, like in process_manual
-        #      For doing a batch of files, you could call run_weights() and store the csv-formatted output strings
-        # measure, _, _, _ = MOM_Calculations.w_windowed_min_slope_mid(dat, calibration, start_peak_index, end_peak_index, local_baseline)
-        # measure, _, _, _ = MOM_Calculations.w_windowed_min_slope(dat, calibration, start_peak_index, end_peak_index, local_baseline)
-        wt_info = run_weights(dat, calibration, start_peak_index, end_peak_index, local_baseline, f_name, trace_counter, output_frame_text, include_header=False, write_output_to_screen=True)
-        
-        # add the weight info to the output to be saved
-        formatted_output.append(wt_info)
+            peaks = sign_switches[sign_switches == -2].index - 1
 
-        # Organize the tex
-        # t annotations for the final trace graph
-        if (show_graph):
-            peak_markers_x.append(start_peak_index)
-            peak_markers_x.append(end_peak_index)
-            peak_markers_y.append(dat.loc[start_peak_index, "Measure"])
-            peak_markers_y.append(dat.loc[end_peak_index, "Measure"])
-            measure_centers_x.append(measure_center)
-            measure_centers_y.append(dat.loc[measure_center, "Measure"])
+            start_peak_index = start
+            end_peak_index = end
 
-            # get the 10th value (weight_min_slope_gravity) to put toward the graphing
-            values = wt_info.split(',')
-            if len(values) >= 10:
-                weight_min_slope_gravity = values[9].strip()
-                measure = round(float(weight_min_slope_gravity), 2) # Convert to float and round
-        
-            else:
-                measure = 0
+            # If there are 3 or more peaks, take the penguin rule peaks
+            if len(peaks) > 2:
+                # Second peak
+                start_peak_index = peaks[1]
+                # Second-to-last peak
+                end_peak_index = peaks[-2]
 
-            # Append the value labeled by the trace counter
-            measures.append(str(trace_counter) + ": " + str(measure))
+            # Find central value of the window
+            measure_center = int((start_peak_index + end_peak_index) / 2)
+
+            # CHANGE 8/30/24 - GET the LOCAL BASELINE VALUE HERE
+            local_baseline, good_flag = get_bird_baseline(dat, start_peak_index, end_peak_index, buffer_size=300, window_size=40)
+            
+            if (False): # extended comments
+                pass
+                # Find the weight within the window
+                # NOTE you could call run_weights() here, like in process_manual
+                #      For doing a batch of files, you could call run_weights() and store the csv-formatted output strings
+                # measure, _, _, _ = MOM_Calculations.w_windowed_min_slope_mid(dat, calibration, start_peak_index, end_peak_index, local_baseline)
+                # measure, _, _, _ = MOM_Calculations.w_windowed_min_slope(dat, calibration, start_peak_index, end_peak_index, local_baseline)
+            wt_info = run_weights(dat, calibration, start_peak_index, end_peak_index, local_baseline, f_name, trace_counter, output_frame_text, include_header=False, write_output_to_screen=True)
+            
+            # add the weight info to the output to be saved
+            formatted_output.append(wt_info)
+
+            # Organize the tex
+            # t annotations for the final trace graph
+            if (show_graph):
+                peak_markers_x.append(start_peak_index)
+                peak_markers_x.append(end_peak_index)
+                peak_markers_y.append(dat.loc[start_peak_index, "Measure"])
+                peak_markers_y.append(dat.loc[end_peak_index, "Measure"])
+                measure_centers_x.append(measure_center)
+                measure_centers_y.append(dat.loc[measure_center, "Measure"])
+
+                # get the 10th value (weight_min_slope_gravity) to put toward the graphing
+                values = wt_info.split(',')
+                if len(values) >= 10:
+                    weight_min_slope_gravity = values[9].strip()
+                    measure = round(float(weight_min_slope_gravity), 2) # Convert to float and round
+            
+                else:
+                    measure = 0
+
+                # Append the value labeled by the trace counter
+                measures.append(str(trace_counter) + ": " + str(measure))
+
+            ##### END Of processing for valid traces
+        else:
+            # too-long trace: keep CSV structure but flag weight as Too long
+            dtime = dat.loc[int((start+end)/2), "Datetime"]
+            formatted_output.append("\t{fname},{counter},{dtime},{samples},{samplesMinSlope},{wMinSlopeG}\n".format(
+                fname=f_name,
+                counter=trace_counter,
+                dtime=dtime,
+                samples=window_len,
+                samplesMinSlope=window_len,
+                wMinSlopeG="Too_long redo manually"
+            ))
+
+            # also write a screen line similar to output_weights when requested
+            if output_frame_text is not None:
+                screen_string = "\t{counter},\t{wMinSlopeG},\t{duration},\t{dtime}\n".format(
+                    counter=trace_counter,
+                    wMinSlopeG="Too_long redo manually",
+                    duration=round(window_len/60, 2),
+                    dtime=dtime
+                )
+                output_frame_text.tag_configure("regular", font=("TkDefaultFont", 10))
+                output_frame_text.configure(state="normal")
+                output_frame_text.insert("end", screen_string, "regular")
+                output_frame_text.configure(state="disabled")
+
+            if(show_graph):
+                # still need to increment the trace counter on the figure
+                measures.append(str(trace_counter) + ": " + "TOO LONG")
 
         # increment the trace
         trace_counter = trace_counter + 1
@@ -1700,6 +1934,7 @@ from tkinter import ttk
 # Global variables needed for the progress window management
 stop_processing = False
 progress_window = None
+current_batch_summary_file = None
 
 ##############
 #    create_progress_window
@@ -1807,6 +2042,14 @@ def process_auto_batch_2(calibration, calibration_user_entered_values, output_fr
     if not files:
         tk.messagebox.showinfo(message=f"No files starting with 'DL_' found in the selected folder.")
         return
+    
+        # Ask user for run mode to be used later
+    bOvernight = messagebox.askyesno(
+        "Run mode",
+        "Run in realtime or overnight?\n\nChoose Yes for Overnight, No for Realtime."
+    )
+    if bOvernight:
+        tk.messagebox.showinfo(message="Overnight mode selected. The output file will be saved without showing a completion message.")
 
     if show_graph:
         progress_bar, progress_label, current_item_label, filename_label = create_progress_window(len(files), on_close)
@@ -1841,14 +2084,17 @@ def process_auto_batch_2(calibration, calibration_user_entered_values, output_fr
                     stripped_data = [line.strip('\n').strip('\t') for line in my_output]
                 else:
                     # If calibration was bad, log the file name with "Bad Calibration"
-                    stripped_data = [f_path + " Bad Calibration"]
-                    output_error(stripped_data, output_frame_text)
+                    bad_msg = f_path + " Bad Calibration"
+                    stripped_data = [bad_msg]
+                    batch_output.extend(stripped_data)
+                    output_error(bad_msg, output_frame_text)
+                    continue
                 
                 # Extend batch_output with the processed or error data
                 batch_output.extend(stripped_data)
             except Exception as e:
                 print("Error occurred:", e)
-                my_output = filename + " - redo manually"
+                my_output = filename + ", problem_redo_manually"
                 print(my_output)
                 output_to_screen(my_output, output_frame_text) 
                 batch_output.extend([my_output])
@@ -1860,7 +2106,12 @@ def process_auto_batch_2(calibration, calibration_user_entered_values, output_fr
     if show_graph:
         progress_window.destroy()
 
-    output_file_path = filedialog.asksaveasfilename(title="Save Combined File As", defaultextension=".txt",
+
+    if bOvernight:
+        timestamp = tm.strftime("%Y-%m-%d_%H-%M-%S")
+        output_file_path = os.path.join(folder_path, f"Overnight_Batch_Output_{timestamp}.txt")
+    else:
+        output_file_path = filedialog.asksaveasfilename(title="Save Combined File As", defaultextension=".txt",
                                                    filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
     if output_file_path:
         batch_output_df = pd.DataFrame(batch_output, columns=['Formatted_Output'])
@@ -1876,8 +2127,11 @@ def process_auto_batch_2(calibration, calibration_user_entered_values, output_fr
         new_row_df = pd.DataFrame([new_row])
         batch_output_df = pd.concat([new_row_df, batch_output_df], ignore_index=True)
         batch_output_df.to_csv(output_file_path, index=False, header=False, sep='\t')
-
-    tk.messagebox.showinfo(message=f"Files processed: {len(files)}")
+    
+    if bOvernight:
+        pass
+    else:
+        tk.messagebox.showinfo(message=f"Files processed: {len(files)}")
 
 ##############
 #    process_auto_start
@@ -1909,6 +2163,8 @@ def trim():
 
         # User selects file
     f_path = get_user_file()
+    if not f_path:
+        return
 
     # Parse data from the file and return a dataframe
     dat = parse_trace_file(f_path)
