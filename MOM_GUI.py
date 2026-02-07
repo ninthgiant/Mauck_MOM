@@ -15,6 +15,7 @@
 # VERSION = "v12(2024-12-07)"
 VERSION = "v13(2026-02-04)"  # updated output formats onscreen and autobatch output file, also adjusted default window size
 VERSION = "v14(2026-02-06)"  # Cleand up Batch code and added a review button to review batch summaries, also added a trim button to trim the data files for better viewing and processing
+VERSION = "v15(2026-02-07)"  # Cleaned output from Batch operations, more failure info, timer for elasped time to run the batch ops
 
 #######################################
 #######################################
