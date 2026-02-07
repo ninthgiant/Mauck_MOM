@@ -33,15 +33,16 @@ import queue
 import threading
 
 import MOM_Calculations
+import MOM_Globals
 
 #######################################
 #######################################
 # Calculation Parameters
 #######################################
 #######################################
-max_length_secs = 20  # maximum length of time (seconds) to allow in automatic processing mode - make this a user preference later
-max_length_auto = 60 *  max_length_secs # maximum number of data points to allow in automatic processing mode - auto_one_file()
-r2_threshold_auto = 0.9999  # minimum R^2 value to allow in automatic processing mode - auto_one_file() - was 0.99999, relaxed to 0.9999 to allow more files to be processed, but can adjust as needed based on results and user preference
+max_length_secs = MOM_Globals.max_length_secs
+max_length_auto = MOM_Globals.max_length_auto
+r2_threshold_auto = MOM_Globals.r2_threshold_auto
 
 #######################################
 #######################################
@@ -60,15 +61,15 @@ PLOT_VIEWER_HEIGHT = 4
 #######################################
 #######################################
 # Default monospace font for on-screen tables
-screen_font = "courier"
-screen_font_size = 16
+screen_font = MOM_Globals.screen_font
+screen_font_size = MOM_Globals.screen_font_size
 
 #######################################
 #######################################
 # Internal Flag for printing
 #######################################
 #######################################
-do_print = False
+do_print = MOM_Globals.do_print
 
 #######################################
 #######################################

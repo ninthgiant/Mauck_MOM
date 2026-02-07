@@ -17,6 +17,7 @@
 import numpy as np
 from scipy import stats 
 from tkinter import messagebox
+import MOM_Globals
 
 #######################################
 #######################################
@@ -33,9 +34,9 @@ from tkinter import messagebox
 class Calibration:
     def __init__(self):
         # Default calibration values
-        self.cal1_true = 15.97
-        self.cal2_true = 32.59
-        self.cal3_true = 50.22
+        self.cal1_true = MOM_Globals.calibLow
+        self.cal2_true = MOM_Globals.calibMed
+        self.cal3_true = MOM_Globals.calibHi
 
         # Pre-initialized measurement values
         self.cal1_measured = -1.0
@@ -169,7 +170,7 @@ def w_mean(dat, calibration, start_index, end_index, baseline):
 def w_windowed_min_slope(dat, calibration, start_index, end_index, baseline,
                          min_window_length = 25, max_window_proportion = 0.5):
     
-    do_print = False
+    do_print = MOM_Globals.do_print
     
     # Baseline comparison values
     # Starting "best" (min) slope is the slope across the whole trace segment
