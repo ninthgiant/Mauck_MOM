@@ -82,17 +82,31 @@ def setup_gui():
     input_frame = tk.Frame(root, width=SCREEN_WIDTH, bd=1, padx=INPUT_PAD_X, pady=INPUT_PAD_Y, relief=tk.FLAT)
     input_frame.pack()
     initial_calibration_labels = ["Calib. mass light:", "Calib. mass med:", "Calib. mass heavy:"]
-    initial_calibration_values = calibration.get_true()
+    initial_calibration_values = MOM_Globals.get_calibration_values_for_year(MOM_Globals.calib_Year)
 
     # Initialize the input frames, filled by default with the default-initialized true calibration values
     # NOTE these will change automatic if you change the default values in the Calibration constructor
     calibration_user_entered_values = []
     for i, label in enumerate(initial_calibration_labels):
-        tk.Label(input_frame, text=initial_calibration_labels[i]).grid(row=0, column=i, padx=BUTTON_PAD_X, pady=BUTTON_PAD_Y)
+        tk.Label(input_frame, text=initial_calibration_labels[i]).grid(row=0, column=i + 1, padx=BUTTON_PAD_X, pady=BUTTON_PAD_Y)
         entry = tk.Entry(input_frame)
-        entry.grid(row=1, column=i, padx=5, pady=5)
+        entry.grid(row=1, column=i + 1, padx=5, pady=5)
         entry.insert(0, initial_calibration_values[i])
         calibration_user_entered_values.append(entry)
+
+    tk.Label(input_frame, text="Calib Year:").grid(row=0, column=0, padx=BUTTON_PAD_X, pady=BUTTON_PAD_Y)
+    year_var = tk.StringVar(value=str(MOM_Globals.calib_Year))
+
+    def on_calibration_year_change(selected_year):
+        calib_values = MOM_Globals.set_calibration_year(int(selected_year))
+        for i, entry in enumerate(calibration_user_entered_values):
+            entry.delete(0, tk.END)
+            entry.insert(0, calib_values[i])
+        calibration.set_true(*calib_values)
+
+    year_options = [str(year) for year in MOM_Globals.get_calibration_year_options()]
+    year_menu = tk.OptionMenu(input_frame, year_var, *year_options, command=on_calibration_year_change)
+    year_menu.grid(row=1, column=0, padx=5, pady=5, sticky="ew")
 
     # Buttons
     button_frame = tk.Frame(root, width=BUTTON_WIDTH-10, bd=0, relief=tk.SOLID)

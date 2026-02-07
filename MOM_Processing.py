@@ -1579,7 +1579,11 @@ def find_calibration_flats(measure_series, start_pt, stop_pt, min_len, min_thres
 #   Returns:
 #       text list with (for each file): file name, trace number, date/time of trace, 5 weight values, slope of measured trace, min slope found
 #########
-def auto_one_file(f_path, calibration, calibration_user_entered_values, output_frame_text, show_graph = True, write_output_to_screen=True, ui_queue=None, calibration_true_values=None):
+def auto_one_file(f_path, calibration, calibration_user_entered_values, output_frame_text, show_graph = True, write_output_to_screen=True, ui_queue=None, calibration_true_values=None, batch_context_tracker=None):
+    global stop_processing
+
+    if stop_processing:
+        return []
 
       # Parse data from the file
     dat = parse_trace_file(f_path)
@@ -1590,6 +1594,8 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
 
     # Extract useful file name for display / report
     f_name = os.path.basename(f_path)
+    if batch_context_tracker is not None:
+        batch_context_tracker.setdefault(f_name, {"summary": False, "calibration": False})
 
     # Write the initial processing output to GUI text widget
     if write_output_to_screen and output_frame_text is not None:
@@ -1617,6 +1623,8 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
             ),
             "indent": True
         })
+        if batch_context_tracker is not None:
+            batch_context_tracker[f_name]["summary"] = True
 
     calibration, good_R2 = run_auto_calibration(
         dat,
@@ -1655,6 +1663,8 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
                     s=round(calibration.regression_gradient, 5)
                 )
             })
+            if batch_context_tracker is not None:
+                batch_context_tracker[f_name]["calibration"] = True
             ui_queue.put({"type": "screen", "message": "File\tTrace\tWeight\tDur(s)\tTime"})
         return [fail_line]
     else:
@@ -1673,6 +1683,8 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
                 s=round(calibration.regression_gradient, 5)
             )
         })
+        if batch_context_tracker is not None:
+            batch_context_tracker[f_name]["calibration"] = True
         ui_queue.put({"type": "screen", "message": "File\tTrace\tWeight\tDur(s)\tTime"})
 
     # ------------------
@@ -1707,6 +1719,8 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
     
     # Go through every pair of start-end values (this marks the edges of a window of 0s) 
     for start, end in zip(zero_start_indices, zero_end_indices):
+        if stop_processing:
+            return []
         # if the size of that window of 0s is <10 samples long
         # mark those values as 1s, instead of 0s
         if end - start + 1 < 10 :
@@ -1741,6 +1755,8 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
 
     # Go through every pair of start-end values (this marks the edges of a window of 1s) 
     for start, end in zip(window_starts_indices, window_end_indices):
+        if stop_processing:
+            return []
         # if the size of that window of 1s is <25 samples long
         if end - start + 1 > 25:
             # mark those values as 0s, instead of 1s
@@ -1768,6 +1784,8 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
         ### catch too long traces inside here and return an error message if they are too long, 
 
     for start, end in zip(retained_window_starts_indices, retained_window_ends_indices):
+        if stop_processing:
+            return formatted_output
 
         window_len = end - start + 1    # length of the trace window
         if window_len < max_length_auto:   # as long as it is not too long, we can process it, otherwise we will ask the user to do it manually
@@ -1904,14 +1922,14 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
                 dtime=dtime,
                 samples=window_len,
                 samplesMinSlope=window_len,
-                wMinSlopeG="Too_Long_redo_manually"
+                wMinSlopeG="Too_Long"
             ))
 
             # also write a screen line similar to output_weights when requested
             if write_output_to_screen and output_frame_text is not None:
                 screen_string = "\t{counter},\t{wMinSlopeG},\t{duration},\t{dtime}\n".format(
                     counter=trace_counter,
-                    wMinSlopeG="Too_Long_redo_manually",
+                    wMinSlopeG="Too_Long",
                     duration=round(window_len/60, 2),
                     dtime=dtime
                 )
@@ -2015,6 +2033,9 @@ def create_progress_window(total_files, on_close):
     filename_label = tk.Label(labels_frame, text="", font=("Helvetica", 14))
     filename_label.pack(anchor='center')
 
+    stop_button = tk.Button(progress_window, text="Stop Batch", command=on_close)
+    stop_button.pack(pady=(0, 10))
+
     return progress_bar, progress_label, current_item_label, filename_label
 
 ##############
@@ -2096,6 +2117,7 @@ def process_auto_batch_2(calibration, calibration_user_entered_values, output_fr
     batch_output = []
     files_processed = 0
     valid_extensions = ('.txt', '.csv', '.TXT', '.CSV')
+    batch_context_tracker = {}
 
     try:
         for index, filename in enumerate(files, start=1):
@@ -2119,8 +2141,11 @@ def process_auto_batch_2(calibration, calibration_user_entered_values, output_fr
                         show_graph=False,
                         write_output_to_screen=False,
                         ui_queue=ui_queue,
-                        calibration_true_values=calibration_true_values
+                        calibration_true_values=calibration_true_values,
+                        batch_context_tracker=batch_context_tracker
                     )
+                    if stop_processing:
+                        break
                     if my_output:
                         stripped_data = [line.strip('\n').strip('\t') for line in my_output]
                     else:
@@ -2137,6 +2162,35 @@ def process_auto_batch_2(calibration, calibration_user_entered_values, output_fr
                             ui_queue.put({"type": "screen", "message": screen_line})
                 except Exception as e:
                     print("Error occurred:", e)
+                    context_state = batch_context_tracker.get(filename, {"summary": False, "calibration": False})
+                    try:
+                        dat_err = parse_trace_file(f_path)
+                        if (not context_state.get("summary", False)) and dat_err is not None and len(dat_err) > 0:
+                            ui_queue.put({
+                                "type": "screen",
+                                "message": "{length} samples, from {start_time} to {end_time}".format(
+                                    length=len(dat_err),
+                                    start_time=dat_err.loc[0, "Datetime"],
+                                    end_time=dat_err.loc[len(dat_err)-1, "Datetime"]
+                                )
+                            })
+                    except Exception:
+                        pass
+
+                    try:
+                        if (not context_state.get("calibration", False)) and calibration is not None and calibration.initialized:
+                            ui_queue.put({
+                                "type": "screen",
+                                "message": "Calibration.\tBaseline = {b}\tR^2 = {r}\tIntercept = {i}\tSlope = {s}".format(
+                                    b=int(calibration.baseline),
+                                    r=round(calibration.regression_rsquared, 5),
+                                    i=round(calibration.regression_intercept, 5),
+                                    s=round(calibration.regression_gradient, 5)
+                                )
+                            })
+                    except Exception:
+                        pass
+
                     my_output = filename + ", problem_redo_manually"
                     print(my_output)
                     ui_queue.put({"type": "screen", "message": my_output})
@@ -2170,7 +2224,8 @@ def process_auto_batch_2(calibration, calibration_user_entered_values, output_fr
             "files_total": len(files),
             "files_processed": files_processed,
             "elapsed_hms": f"{hours:02d}:{minutes:02d}:{seconds:02d}",
-            "batch_error": batch_error
+            "batch_error": batch_error,
+            "cancelled": stop_processing
         })
 
 ##############
@@ -2289,16 +2344,26 @@ def process_auto_start(calibration, calibration_user_entered_values, output_fram
                         except tk.TclError:
                             pass
                         progress_refs = None
-                    if not event["bOvernight"]:
+                    if not event["bOvernight"] and not event.get("cancelled", False):
                         tk.messagebox.showinfo(message=f"Files processed: {event['files_processed']} of {event['files_total']}")
-                    output_to_screen(
-                        f"--- Finished Batch Processing: {event['elapsed_hms']}",
-                        output_frame_text,
-                        bold=True,
-                        indent=False,
-                        prefix_newlines=1,
-                        suffix_newlines=2
-                    )
+                    if event.get("cancelled", False):
+                        output_to_screen(
+                            f"--- Batch Processing Cancelled: {event['files_processed']} of {event['files_total']} files in {event['elapsed_hms']}",
+                            output_frame_text,
+                            bold=True,
+                            indent=False,
+                            prefix_newlines=1,
+                            suffix_newlines=2
+                        )
+                    else:
+                        output_to_screen(
+                            f"--- Finished Batch Processing: {event['elapsed_hms']}",
+                            output_frame_text,
+                            bold=True,
+                            indent=False,
+                            prefix_newlines=1,
+                            suffix_newlines=2
+                        )
                     if event.get("batch_error"):
                         output_error(f"Batch processing error: {event['batch_error']}", output_frame_text)
                     if on_batch_end is not None and not batch_end_called:

@@ -47,16 +47,38 @@ Time_Zone_MOM = "EST" # AST is what RFID are usually on
 
 ##############
 #   --- Calibration weights to be used as Default calib values (self.cal1_true...) in line 36+ of MOM_Calculations
+#   --- support for multiple years. add values for more years as needed. these are used in the GUI to populate the dropdown menu for calibration year, and to set the default calibration values when a year is selected. also used in MOM_Calculations to set the default calibration values when the program starts.  
 ######
-calibLow = 15.97
-calibMed = 32.59
-calibHi  = 50.22
+CALIBRATION_BY_YEAR = {
+    2024: (15.97, 32.59, 50.22),
+    2025: (32.59, 50.22, 100.00),
+    2026: (30.00, 50.00, 70.00),
+}
+
+calib_Year = 2025. #default year
+
+def get_calibration_year_options():
+    return sorted(CALIBRATION_BY_YEAR.keys())
+
+def get_calibration_values_for_year(year):
+    selected_year = int(year)
+    if selected_year not in CALIBRATION_BY_YEAR:
+        selected_year = get_calibration_year_options()[0]
+    return CALIBRATION_BY_YEAR[selected_year]
+
+def set_calibration_year(year):
+    global calib_Year, calibLow, calibMed, calibHi
+    calib_Year = int(year)
+    calibLow, calibMed, calibHi = get_calibration_values_for_year(calib_Year)
+    return calibLow, calibMed, calibHi
+
+calibLow, calibMed, calibHi = set_calibration_year(calib_Year)
 
 
 ##############
 #   --- varialbes defined in MOM_Processing
 ######
 max_length_secs = 20  # maximum length of time (seconds) to allow in automatic processing mode - make this a user preference later
-max_length_auto = 60 *  max_length_secs # maximum number of data points to allow in automatic processing mode - auto_one_file()
+sampling_rate = 60
+max_length_auto = sampling_rate *  max_length_secs # maximum number of data points to allow in automatic processing mode - auto_one_file()
 r2_threshold_auto = 0.9999  # minimum R^2 value to allow in automatic processing mode - auto_one_file() - was 0.99999, relaxed to 0.9999 to allow more files to be processed, but can adjust as needed based on results and user preference
-
