@@ -1102,115 +1102,14 @@ def process_auto(calibration, calibration_user_entered_values, output_frame_text
         else:
             my_header2 = return_header("short")
         # output_to_screen(my_header, output_frame_text)
-        my_output = auto_one_file(f_path, calibration, calibration_user_entered_values, output_frame_text, show_graph = True)
+        try:
+            my_output = auto_one_file(f_path, calibration, calibration_user_entered_values, output_frame_text, show_graph = True)
+        except Exception as e:
+            print("Error occurred:", e)
+            output_error("problem_redo_manually", output_frame_text)
+            return
 
 
-
-
-#######
-# ************************************************************
-# Function process_auto_batch [CORE OPERATION]
-#   - Runs automated processing of multiple files
-#   - User chooses a folder containing all the files to batch process
-#   - Processes each file and saves the returned text info for all the relevant traces on the file
-#   - Only processes files starting with "DL" and ending with "TXT" or "CSV" (and lowercase)
-#   REPLACED BY AUTO_BATCH_2 - this is the original version that just calls auto_one_file for each file, and then combines the output. Auto_batch_2 is a more integrated version that does all the processing within the batch function, which allows for more flexibility and efficiency (e.g., not having to re-parse files multiple times). Keeping this around for now in case we want to pull any code from it, but it will likely be deleted eventually.
-#
-# Parameters:
-#   calibration                     - weight calibration object (MOM_Calculations.Calibration)
-#   calibration_user_entered_values - tkinter text input frames to update initial calibration values (list of tkinter.Entry)
-#   output_frame_text               - tkinter output text widget frame for writing (tkinter.Text)
-# Returns: None
-#######
-def process_auto_batch(calibration, calibration_user_entered_values, output_frame_text, show_graph = True):
- 
-    do_print = False
-
-    # User selects folder to deal with 
-    folder_path = filedialog.askdirectory()
-
-    if do_print: 
-        print(folder_path)
-        all_files = os.listdir(folder_path)
-    
-        # Filter out only files (not directories)
-        files = [f for f in all_files if os.path.isfile(os.path.join(folder_path, f))]
-
-        # Print each file name
-        for file_name in files: print(file_name)
-
-    if(folder_path):
-
-        ## start timer
-        start_time = tm.time()
-
-        # Define the header and initialize the list with the header
-        column_names = ["Filename", "Sequence", "DateTime", "Start_pt", "End_pt", "W1", "W2", "W3", "W4", "W5", "Intcpt", "Slope"]
-
-        # Setup a list to hold all the results from all the files
-        batch_output = []
-
-        # Define valid file extensions
-        valid_extensions = ('.txt', '.csv', '.TXT', '.CSV')
-
-        for filename in os.listdir(folder_path):
-            if filename.startswith('.DS'):
-                # skip this file that MacOS makes in the background
-                continue
-
-            if filename.startswith('DL') and filename.lower().endswith(valid_extensions):
-
-                if do_print: print(f"Handling: {filename}")
-
-                f_path = os.path.join(folder_path, filename)
-                
-                try:
-                    # Process the file and get the output
-                    my_output = auto_one_file(f_path, calibration, calibration_user_entered_values, output_frame_text, show_graph=False)
-                    
-                    # Assuming auto_one_file returns a list of lists or tuples with the expected data format
-                    if do_print: print(my_output)
-                except Exception as e:
-                    print("error occurred")
-                    my_output = filename
-
-                # the built-in auto formatting doesn't work for exporting the data, so change a couple of things
-                # 1- we don't need an extra hard return
-                stripped_data = [line.strip('\n') for line in my_output]
-                # 2- also remove the leading \t
-                stripped_data = [line.strip('\t') for line in stripped_data]
-                batch_output.extend(stripped_data)
-
-                if do_print: print("Combined, next file...")
-
-        # end timer and Calculate elapsed time
-        end_time = tm.time()
-        elapsed_time = end_time - start_time  
-        print("-------- ")
-        print(f"Time taken using time module: {end_time - start_time:.4f} seconds")
-        print("--------")
-        
-        # Ask the user to choose the file path and name for saving the output
-        output_file_path = filedialog.asksaveasfilename(title="Save Combined File As", defaultextension=".txt",
-                                                    filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
-        
-        batch_output_df = pd.DataFrame(batch_output, columns=['Formatted_Output'])
-
-        # pseudo header added
-        new_row = {"Formatted_Output": "fname,seq,dtime,start,stop,wMean,wMeanG,wMedian,wMinSlope,wMinSlopeG,slope,minSlope"}
-        # Convert the new row to a DataFrame so we can put it at the top of the list
-        new_row_df = pd.DataFrame([new_row])
-        # put the new row before the rest of the data - now a header
-        batch_output_df = pd.concat([new_row_df, batch_output_df], ignore_index=True)
-
-        batch_output_df.to_csv(output_file_path, index=False, header=False, sep='\t')
-
-        tk.messagebox.showinfo(message = "Files processed and saved.")
-        return None
-    else:
-        tk.messagebox.showinfo(message = "No folder chosen. Try again.")
-        return None
-    
 
 
 #######
@@ -1226,15 +1125,30 @@ def process_auto_batch(calibration, calibration_user_entered_values, output_fram
 # Returns:
 #   calibration object, uninitialized or initialized (NONE), if user calibration failed, and T/F is initialized, T/F if R2 good
 #######
-def run_auto_calibration(dat, calibration, calibration_user_entered_values, output_frame_text):
+def run_auto_calibration(dat, calibration, calibration_user_entered_values, output_frame_text, calibration_true_values=None):
 
-    if not calibration.set_true(*[entry.get() for entry in calibration_user_entered_values]):
-        if output_frame_text is not None:
-            output_error("ERROR invalid calibration input value", output_frame_text)
-        else:
-            print("ERROR invalid calibration input value")
-        # We return without an initialized calibration object if this failed
-        return None, False  # Return indicating failure, the second value isn't really needed
+    if calibration_true_values is not None:
+        try:
+            cal1_true = float(calibration_true_values[0])
+            cal2_true = float(calibration_true_values[1])
+            cal3_true = float(calibration_true_values[2])
+            calibration.cal1_true = cal1_true
+            calibration.cal2_true = cal2_true
+            calibration.cal3_true = cal3_true
+        except (ValueError, TypeError, IndexError):
+            if output_frame_text is not None:
+                output_error("ERROR invalid calibration input value", output_frame_text)
+            else:
+                print("ERROR invalid calibration input value")
+            return None, False
+    else:
+        if not calibration.set_true(*[entry.get() for entry in calibration_user_entered_values]):
+            if output_frame_text is not None:
+                output_error("ERROR invalid calibration input value", output_frame_text)
+            else:
+                print("ERROR invalid calibration input value")
+            # We return without an initialized calibration object if this failed
+            return None, False  # Return indicating failure, the second value isn't really needed
 
     # Conduct calibrations
     calibration_true_values = calibration.get_true()
@@ -1664,7 +1578,7 @@ def find_calibration_flats(measure_series, start_pt, stop_pt, min_len, min_thres
 #   Returns:
 #       text list with (for each file): file name, trace number, date/time of trace, 5 weight values, slope of measured trace, min slope found
 #########
-def auto_one_file(f_path, calibration, calibration_user_entered_values, output_frame_text, show_graph = True, write_output_to_screen=True, ui_queue=None):
+def auto_one_file(f_path, calibration, calibration_user_entered_values, output_frame_text, show_graph = True, write_output_to_screen=True, ui_queue=None, calibration_true_values=None):
 
       # Parse data from the file
     dat = parse_trace_file(f_path)
@@ -1703,7 +1617,13 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
             "indent": True
         })
 
-    calibration, good_R2 = run_auto_calibration(dat, calibration, calibration_user_entered_values, output_frame_text)
+    calibration, good_R2 = run_auto_calibration(
+        dat,
+        calibration,
+        calibration_user_entered_values,
+        output_frame_text,
+        calibration_true_values=calibration_true_values
+    )
     if calibration is None or not calibration.initialized or not good_R2:
         print("Calibration failed.")
         print("R2 value: ", calibration.regression_rsquared if calibration else "N/A")
@@ -1900,9 +1820,53 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
                 # Find the weight within the window
                 # NOTE you could call run_weights() here, like in process_manual
                 #      For doing a batch of files, you could call run_weights() and store the csv-formatted output strings
-                # measure, _, _, _ = MOM_Calculations.w_windowed_min_slope_mid(dat, calibration, start_peak_index, end_peak_index, local_baseline)
                 # measure, _, _, _ = MOM_Calculations.w_windowed_min_slope(dat, calibration, start_peak_index, end_peak_index, local_baseline)
-            wt_info = run_weights(dat, calibration, start_peak_index, end_peak_index, local_baseline, f_name, trace_counter, output_frame_text, include_header=False, write_output_to_screen=write_output_to_screen)
+            try:
+                wt_info = run_weights(
+                    dat,
+                    calibration,
+                    start_peak_index,
+                    end_peak_index,
+                    local_baseline,
+                    f_name,
+                    trace_counter,
+                    output_frame_text,
+                    include_header=False,
+                    write_output_to_screen=write_output_to_screen
+                )
+            except Exception as e:
+                print("Error occurred:", e)
+                dtime = dat.loc[int((start+end)/2), "Datetime"] if len(dat) > 0 else "NA"
+                wt_info = "\t{fname},{counter},{dtime},{samples},{samplesMinSlope},{wMinSlopeG}\n".format(
+                    fname=f_name,
+                    counter=trace_counter,
+                    dtime=dtime,
+                    samples=window_len,
+                    samplesMinSlope=window_len,
+                    wMinSlopeG="problem_redo_manually"
+                )
+                if write_output_to_screen and output_frame_text is not None:
+                    screen_string = "\t{counter},\t{wMinSlopeG},\t{duration},\t{dtime}\n".format(
+                        counter=trace_counter,
+                        wMinSlopeG="problem_redo_manually",
+                        duration=round(window_len/60, 2),
+                        dtime=dtime
+                    )
+                    output_frame_text.tag_configure("regular", font=("TkDefaultFont", 10))
+                    output_frame_text.configure(state="normal")
+                    output_frame_text.insert("end", screen_string, "regular")
+                    output_frame_text.configure(state="disabled")
+                elif ui_queue is not None:
+                    ui_queue.put({
+                        "type": "screen",
+                        "message": "{fname},\t{counter},\t{wMinSlopeG},\t{duration},\t{dtime}".format(
+                            fname=f_name,
+                            counter=trace_counter,
+                            wMinSlopeG="problem_redo_manually",
+                            duration=round(window_len/60, 2),
+                            dtime=dtime
+                        )
+                    })
             
             # add the weight info to the output to be saved
             formatted_output.append(wt_info)
@@ -2111,16 +2075,17 @@ def format_batch_screen_line(formatted_line):
 #   Returns:
 #    - None; this outputs all the data to the screen and to a text file
 #########
-def process_auto_batch_2(calibration, calibration_user_entered_values, output_frame_text, folder_path, files, bOvernight, output_file_path, ui_queue, output_long=False):
+def process_auto_batch_2(calibration, calibration_user_entered_values, output_frame_text, folder_path, files, bOvernight, output_file_path, ui_queue, calibration_true_values, output_long=False):
 
     no_diagnostics = True
     batch_start_time = tm.time()
+    batch_error = None
 
     global stop_processing
 
     ui_queue.put({
         "type": "screen",
-        "message": "STARTING BATCH PROCESSING",
+        "message": "STARTING BATCH PROCESSING AT: {start_hms}".format(start_hms=tm.strftime("%H:%M:%S")),
         "bold": True,
         "indent": False,
         "prefix_newlines": 2,
@@ -2128,74 +2093,84 @@ def process_auto_batch_2(calibration, calibration_user_entered_values, output_fr
     })
 
     batch_output = []
+    files_processed = 0
     valid_extensions = ('.txt', '.csv', '.TXT', '.CSV')
 
-    for index, filename in enumerate(files, start=1):
-        if stop_processing:
-            break
+    try:
+        for index, filename in enumerate(files, start=1):
+            if stop_processing:
+                break
 
-        if filename.startswith('.DS'):
-            continue
+            if filename.startswith('.DS'):
+                continue
 
-        if filename.startswith('DL') and filename.lower().endswith(valid_extensions):
-            ui_queue.put({"type": "progress", "index": index, "total": len(files), "filename": filename})
-            f_path = os.path.join(folder_path, filename)
+            if filename.startswith('DL') and filename.lower().endswith(valid_extensions):
+                files_processed += 1
+                ui_queue.put({"type": "progress", "index": index, "total": len(files), "filename": filename})
+                f_path = os.path.join(folder_path, filename)
 
-            try:
-                my_output = auto_one_file(
-                    f_path,
-                    calibration,
-                    calibration_user_entered_values,
-                    None,
-                    show_graph=False,
-                    write_output_to_screen=False,
-                    ui_queue=ui_queue
-                )
-                if my_output:
-                    stripped_data = [line.strip('\n').strip('\t') for line in my_output]
-                else:
-                    bad_msg = f_path + " Bad Calibration"
-                    stripped_data = [bad_msg]
+                try:
+                    my_output = auto_one_file(
+                        f_path,
+                        calibration,
+                        calibration_user_entered_values,
+                        None,
+                        show_graph=False,
+                        write_output_to_screen=False,
+                        ui_queue=ui_queue,
+                        calibration_true_values=calibration_true_values
+                    )
+                    if my_output:
+                        stripped_data = [line.strip('\n').strip('\t') for line in my_output]
+                    else:
+                        bad_msg = f_path + " Bad Calibration"
+                        stripped_data = [bad_msg]
+                        batch_output.extend(stripped_data)
+                        ui_queue.put({"type": "error", "message": bad_msg})
+                        continue
+
                     batch_output.extend(stripped_data)
-                    ui_queue.put({"type": "error", "message": bad_msg})
-                    continue
+                    for line in stripped_data:
+                        screen_line = format_batch_screen_line(line)
+                        if screen_line is not None:
+                            ui_queue.put({"type": "screen", "message": screen_line})
+                except Exception as e:
+                    print("Error occurred:", e)
+                    my_output = filename + ", problem_redo_manually"
+                    print(my_output)
+                    ui_queue.put({"type": "screen", "message": my_output})
+                    batch_output.extend([my_output])
 
-                batch_output.extend(stripped_data)
-                for line in stripped_data:
-                    screen_line = format_batch_screen_line(line)
-                    if screen_line is not None:
-                        ui_queue.put({"type": "screen", "message": screen_line})
-            except Exception as e:
-                print("Error occurred:", e)
-                my_output = filename + ", problem_redo_manually"
-                print(my_output)
-                ui_queue.put({"type": "screen", "message": my_output})
-                batch_output.extend([my_output])
-
-    if output_file_path:
-        batch_output_df = pd.DataFrame(batch_output, columns=['Formatted_Output'])
-        if no_diagnostics:
-            if output_long:
-                new_row = return_header("standard")
+        if output_file_path:
+            batch_output_df = pd.DataFrame(batch_output, columns=['Formatted_Output'])
+            if no_diagnostics:
+                if output_long:
+                    new_row = return_header("standard")
+                else:
+                    new_row = return_header("short")
+                    new_row = {"Formatted_Output": "File,Trace,Date,Time,Pts_All,Pts_Calc,Weight"}
             else:
-                new_row = return_header("short")
-                new_row = {"Formatted_Output": "File,Trace,Date,Time,Pts_All,Pts_Calc,Weight"}
-        else:
-            new_row = return_header("diagnostic")
-        new_row_df = pd.DataFrame([new_row])
-        batch_output_df = pd.concat([new_row_df, batch_output_df], ignore_index=True)
-        batch_output_df.to_csv(output_file_path, index=False, header=False, sep='\t')
-
-    elapsed_seconds = int(tm.time() - batch_start_time)
-    hours = elapsed_seconds // 3600
-    minutes = (elapsed_seconds % 3600) // 60
-    seconds = elapsed_seconds % 60
-    ui_queue.put({
-        "type": "done",
-        "bOvernight": bOvernight,
-        "files_total": len(files),
-        "elapsed_hms": f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-    })
+                new_row = return_header("diagnostic")
+            new_row_df = pd.DataFrame([new_row])
+            batch_output_df = pd.concat([new_row_df, batch_output_df], ignore_index=True)
+            batch_output_df.to_csv(output_file_path, index=False, header=False, sep='\t')
+    except Exception as e:
+        batch_error = str(e)
+        print("Batch worker error:", e)
+        ui_queue.put({"type": "error", "message": f"Batch processing error: {batch_error}"})
+    finally:
+        elapsed_seconds = int(tm.time() - batch_start_time)
+        hours = elapsed_seconds // 3600
+        minutes = (elapsed_seconds % 3600) // 60
+        seconds = elapsed_seconds % 60
+        ui_queue.put({
+            "type": "done",
+            "bOvernight": bOvernight,
+            "files_total": len(files),
+            "files_processed": files_processed,
+            "elapsed_hms": f"{hours:02d}:{minutes:02d}:{seconds:02d}",
+            "batch_error": batch_error
+        })
 
 ##############
 #    process_auto_start
@@ -2208,15 +2183,19 @@ def process_auto_batch_2(calibration, calibration_user_entered_values, output_fr
 #   Returns:
 #    - None
 #########
-def process_auto_start(calibration, calibration_user_entered_values, output_frame_text, show_graph=True):
+def process_auto_start(calibration, calibration_user_entered_values, output_frame_text, show_graph=True, on_batch_start=None, on_batch_end=None):
     global stop_processing, progress_window
 
     stop_processing = False
+    if on_batch_start is not None:
+        on_batch_start()
 
     folder_path = filedialog.askdirectory()
     if not folder_path:
         tk.messagebox.showinfo(message="No folder chosen. Try again.")
         output_to_screen("--- Batch Processsing terminated", output_frame_text)
+        if on_batch_end is not None:
+            on_batch_end()
         return
 
     all_files = os.listdir(folder_path)
@@ -2224,12 +2203,24 @@ def process_auto_start(calibration, calibration_user_entered_values, output_fram
     if not files:
         tk.messagebox.showinfo(message=f"No files starting with 'DL_' found in the selected folder.")
         output_to_screen("--- Batch Processsing terminated", output_frame_text)
+        if on_batch_end is not None:
+            on_batch_end()
         return
 
     bOvernight = messagebox.askyesno(
         "Run mode",
         "Run in realtime or overnight?\n\nChoose Yes for Overnight, No for Realtime."
     )
+
+    try:
+        calibration_true_values = tuple(float(entry.get()) for entry in calibration_user_entered_values)
+    except ValueError:
+        tk.messagebox.showerror(message="User entered invalid calibration value(s).")
+        output_to_screen("--- Batch Processsing terminated", output_frame_text)
+        if on_batch_end is not None:
+            on_batch_end()
+        return
+
     if bOvernight:
         tk.messagebox.showinfo(message="Overnight mode selected. The output file will be saved without showing a completion message.")
         timestamp = tm.strftime("%Y-%m-%d_%H-%M-%S")
@@ -2248,12 +2239,15 @@ def process_auto_start(calibration, calibration_user_entered_values, output_fram
     ui_queue = queue.Queue()
     processing_thread = threading.Thread(
         target=process_auto_batch_2,
-        args=(calibration, calibration_user_entered_values, output_frame_text, folder_path, files, bOvernight, output_file_path, ui_queue),
+        args=(calibration, calibration_user_entered_values, output_frame_text, folder_path, files, bOvernight, output_file_path, ui_queue, calibration_true_values),
         daemon=True
     )
     processing_thread.start()
+    batch_end_called = False
 
     def poll_batch_ui_queue():
+        nonlocal batch_end_called
+        batch_finished = False
         nonlocal progress_refs
         try:
             while True:
@@ -2287,6 +2281,7 @@ def process_auto_start(calibration, calibration_user_entered_values, output_fram
                         suffix_newlines=event.get("suffix_newlines", 1)
                     )
                 elif event_type == "done":
+                    batch_finished = True
                     if show_graph and progress_window is not None:
                         try:
                             progress_window.destroy()
@@ -2294,7 +2289,7 @@ def process_auto_start(calibration, calibration_user_entered_values, output_fram
                             pass
                         progress_refs = None
                     if not event["bOvernight"]:
-                        tk.messagebox.showinfo(message=f"Files processed: {event['files_total']}")
+                        tk.messagebox.showinfo(message=f"Files processed: {event['files_processed']} of {event['files_total']}")
                     output_to_screen(
                         f"--- Finished Batch Processing: {event['elapsed_hms']}",
                         output_frame_text,
@@ -2303,11 +2298,24 @@ def process_auto_start(calibration, calibration_user_entered_values, output_fram
                         prefix_newlines=1,
                         suffix_newlines=2
                     )
+                    if event.get("batch_error"):
+                        output_error(f"Batch processing error: {event['batch_error']}", output_frame_text)
+                    if on_batch_end is not None and not batch_end_called:
+                        on_batch_end()
+                        batch_end_called = True
         except queue.Empty:
             pass
 
         if processing_thread.is_alive():
             output_frame_text.after(100, poll_batch_ui_queue)
+        elif not batch_finished and on_batch_end is not None and not batch_end_called:
+            if show_graph and progress_window is not None:
+                try:
+                    progress_window.destroy()
+                except tk.TclError:
+                    pass
+            on_batch_end()
+            batch_end_called = True
 
     output_frame_text.after(100, poll_batch_ui_queue)
 

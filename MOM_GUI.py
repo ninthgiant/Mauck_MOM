@@ -16,6 +16,7 @@
 VERSION = "v13(2026-02-04)"  # updated output formats onscreen and autobatch output file, also adjusted default window size
 VERSION = "v14(2026-02-06)"  # Cleand up Batch code and added a review button to review batch summaries, also added a trim button to trim the data files for better viewing and processing
 VERSION = "v15(2026-02-07)"  # Cleaned output from Batch operations, more failure info, timer for elasped time to run the batch ops
+VERSION = "v16(2026-02-07)"  # After Code Review, Tk thread protection, Data Race in Calibration, Files processed counter, UI conisistncy, removed dead code, did not fix baseline calib issue. will do next versoin
 
 #######################################
 #######################################
@@ -104,6 +105,10 @@ def setup_gui():
     # Each button is associated with a core function in MOM_Processing
     buttons = []
 
+    def set_buttons_state(state):
+        for button in buttons:
+            button.config(state=state)
+
     # View button calls MOM_Processing.view()
     button_view = tk.Button(button_frame, text=BUTTON_LABELS[0], command=lambda: MOM_Processing.view(output_frame_text))
     button_view.pack(side=tk.LEFT, padx=BUTTON_PAD_X, pady=BUTTON_PAD_Y)
@@ -125,7 +130,18 @@ def setup_gui():
     buttons.append(button_auto)
 
     # Auto Batch button calls MOM_Processing.process_auto_batch_2() 
-    button_auto_batch = tk.Button(button_frame, text=BUTTON_LABELS[3], command=lambda: MOM_Processing.process_auto_start(calibration, calibration_user_entered_values, output_frame_text, show_graph=True))
+    button_auto_batch = tk.Button(
+        button_frame,
+        text=BUTTON_LABELS[3],
+        command=lambda: MOM_Processing.process_auto_start(
+            calibration,
+            calibration_user_entered_values,
+            output_frame_text,
+            show_graph=True,
+            on_batch_start=lambda: set_buttons_state("disabled"),
+            on_batch_end=lambda: set_buttons_state("normal")
+        )
+    )
     button_auto_batch.pack(side=tk.LEFT, padx=BUTTON_PAD_X, pady=BUTTON_PAD_Y)
     buttons.append(button_auto_batch)
 
