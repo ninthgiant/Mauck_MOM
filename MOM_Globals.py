@@ -17,6 +17,7 @@ VERSION = "v13(2026-02-04)"  # updated output formats onscreen and autobatch out
 VERSION = "v14(2026-02-06)"  # Cleand up Batch code and added a review button to review batch summaries, also added a trim button to trim the data files for better viewing and processing
 VERSION = "v15(2026-02-07)"  # Cleaned output from Batch operations, more failure info, timer for elasped time to run the batch ops
 VERSION = "v16(2026-02-07)"  # After Code Review, Tk thread protection, Data Race in Calibration, Files processed counter, UI conisistncy, removed dead code, did not fix baseline calib issue. will do next versoin
+VERSION = "v17(2026-02-07)"  # added MOM_Globals.py to hold global variables and constants, cleaned up imports and code in other files to use this, added setup_gui() function to MOM_GUI.py to handle GUI setup and parameters, added more comments and documentation, updated version number and change log here in MOM_Globals.py
 
 vAppName = "Mass-O-Matic Analyzer " + VERSION
 
