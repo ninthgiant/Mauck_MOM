@@ -292,8 +292,8 @@ def Batch_Review(output_frame_text):
         output_frame_text.tag_configure("mono", font=(screen_font, screen_font_size))
 
         # Explicit fixed-width formatting for clean alignment
-        headers = ["File", "Lines", "Birds", "Too_Long", "Day_Weights", "Calib_Problem", "Other_Redo_Problem"]
-        widths  = [20,      20,      20,      20,          20,             20,                 20]
+        headers = ["File", "Lines", "Night_Wts", "Too_Long", "Day_Wts", "Calib_Problem", "Other_Redo_Problem", "Summary"]
+        widths  = [20,      20,      20,      20,          20,             20,                 20,                    25]
 
         def fmt_row(row):
             return (
@@ -304,6 +304,7 @@ def Batch_Review(output_frame_text):
                 f"{str(row['Day_Weights']):<{widths[4]}}"
                 f"{str(row['Calib_Problem']):<{widths[5]}}"
                 f"{str(row['Other_Redo_Problem']):<{widths[6]}}"
+                f"{str(row['Summary']):<{widths[7]}}"
             )
 
         header_line = (
@@ -314,6 +315,7 @@ def Batch_Review(output_frame_text):
             f"{headers[4]:<{widths[4]}}"
             f"{headers[5]:<{widths[5]}}"
             f"{headers[6]:<{widths[6]}}"
+            f"{headers[7]:<{widths[7]}}"
         )
 
         body_lines = "\n".join(fmt_row(r) for _, r in summary_df.iterrows())
@@ -387,6 +389,21 @@ def Calculate_Batch_Summary(f_path, Time_AM=7, Time_PM=20):
         "Calib_Problem": [int(calib_counts.get(f, 0)) for f in unique_files],
         "Other_Redo_Problem": [int(other_counts.get(f, 0)) for f in unique_files]
     })
+
+    def classify_summary(row):
+        if row["Calib_Problem"] == 1:
+            return "Calibration_Redo"
+        if row["Lines"] == 1 and row["Other_Redo_Problem"] == 1:
+            return "Complete_Redo"
+        if row["Birds"] > 0 and row["Too_Long"] == 0:
+            return "Night_Visits"
+        if row["Birds"] > 0 or row["Too_Long"] > 0:
+            return "Night_Visits_Too_Long"
+        if row["Birds"] == 0 and row["Too_Long"] == 0:
+            return "No_Visits"
+        return "No_Visits"
+
+    Batch_Summary_df["Summary"] = Batch_Summary_df.apply(classify_summary, axis=1)
 
     print(Batch_Summary_df.head(5))
     return Batch_Summary_df
@@ -2107,7 +2124,10 @@ def process_auto_batch_2(calibration, calibration_user_entered_values, output_fr
 
     ui_queue.put({
         "type": "screen",
-        "message": "STARTING BATCH PROCESSING AT: {start_hms}".format(start_hms=tm.strftime("%H:%M:%S")),
+        "message": "STARTING BATCH PROCESSING AT: {start_hms} ({total_files} files)".format(
+            start_hms=tm.strftime("%H:%M:%S"),
+            total_files=len(files)
+        ),
         "bold": True,
         "indent": False,
         "prefix_newlines": 2,
@@ -2265,7 +2285,7 @@ def process_auto_start(calibration, calibration_user_entered_values, output_fram
 
     bOvernight = messagebox.askyesno(
         "Run mode",
-        "Run in realtime or overnight?\n\nChoose Yes for Overnight, No for Realtime."
+        "Auto-Save the output?\n\nChoose Yes for Overnight, No for Realtime."
     )
 
     try:

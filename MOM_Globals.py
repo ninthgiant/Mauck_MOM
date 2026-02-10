@@ -44,6 +44,11 @@ screen_font_size = 16
 ######
 Time_Zone_MOM = "EST" # AST is what RFID are usually on
 
+##############
+#   --- Threshold weights to flag for user to inspect manually - change as needed based on results and user preference - but not yet used
+######
+threshold_too_low = 32.59  # example value, adjust as needed
+threshold_too_high = 70.00  # example value, adjust as needed
 
 ##############
 #   --- Calibration weights to be used as Default calib values (self.cal1_true...) in line 36+ of MOM_Calculations
