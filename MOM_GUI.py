@@ -21,6 +21,7 @@
 #######################################
 
 import tkinter as tk
+from tkinter import messagebox
 import MOM_Processing
 import MOM_Calculations
 import MOM_Globals
@@ -162,22 +163,42 @@ def setup_gui():
     buttons.append(button_review)
 
     # Add a Trim button - calls MOM_Processing.trim()- NEW FEATURE
-    button_trim = tk.Button(button_frame, text="Trim", command=lambda: MOM_Processing.trim())
-    button_trim.pack(side=tk.LEFT, padx=BUTTON_PAD_X, pady=BUTTON_PAD_Y)
-    buttons.append(button_trim)
+    # button_trim = tk.Button(button_frame, text="Trim", command=lambda: MOM_Processing.trim())
+    # button_trim.pack(side=tk.LEFT, padx=BUTTON_PAD_X, pady=BUTTON_PAD_Y)
+    # buttons.append(button_trim)
 
 
     # Output frame with text widget
     output_frame = tk.Frame(root, width=OUTPUT_FRAME_WIDTH, height=OUTPUT_FRAME_HEIGHT, bd=0, relief=tk.SOLID)
     output_frame.pack(padx=OUTPUT_TEXT_PAD_X, pady=OUTPUT_TEXT_PAD_Y)
 
+    output_header_frame = tk.Frame(output_frame, bd=0, relief=tk.FLAT)
+    output_header_frame.pack(fill=tk.X)
+
+    def clear_output_with_confirm():
+        if not messagebox.askyesno("Confirm Clear", "Clear all text from the output box?", default="no"):
+            return
+        output_frame_text.configure(state="normal")
+        output_frame_text.delete("1.0", tk.END)
+        output_frame_text.configure(state="disabled")
+
+    clear_button = tk.Button(
+        output_header_frame,
+        text="Clear Output",
+        command=clear_output_with_confirm
+    )
+    clear_button.pack(side=tk.RIGHT, padx=BUTTON_PAD_X, pady=(0, BUTTON_PAD_Y))
+
+    output_body_frame = tk.Frame(output_frame, bd=0, relief=tk.FLAT)
+    output_body_frame.pack(fill=tk.BOTH, expand=True)
+
     # Vertical scrollbar for text widget
-    output_scrollbar = tk.Scrollbar(output_frame, orient="vertical")
+    output_scrollbar = tk.Scrollbar(output_body_frame, orient="vertical")
     output_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
     # Place text widgets in frame
     output_frame_text = tk.Text(
-        output_frame,
+        output_body_frame,
         width=OUTPUT_FRAME_WIDTH,
         height=OUTPUT_FRAME_HEIGHT,
         yscrollcommand=output_scrollbar.set,

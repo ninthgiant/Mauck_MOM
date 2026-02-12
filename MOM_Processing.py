@@ -1788,9 +1788,18 @@ def find_calibration_flats(measure_series, start_pt, stop_pt, min_len, min_thres
             if len(new_series) < 2:
                 continue
 
-            x_values = np.arange(len(new_series))
-            slope, intercept = np.polyfit(x_values, new_series['Measure'], 1)
-            mean_val = new_series['Measure'].mean()
+            y_values = pd.to_numeric(new_series["Measure"], errors="coerce").to_numpy(dtype=float)
+            x_values = np.arange(len(y_values), dtype=float)
+            finite_mask = np.isfinite(y_values)
+            if finite_mask.sum() < 2:
+                continue
+
+            try:
+                slope, intercept = np.polyfit(x_values[finite_mask], y_values[finite_mask], 1)
+            except (np.linalg.LinAlgError, ValueError, TypeError):
+                continue
+
+            mean_val = float(np.mean(y_values[finite_mask]))
 
             if(do_print):
                 # print(f"x_values: {x_values}")
@@ -1959,7 +1968,7 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
                 batch_context_tracker[f_name]["calibration"] = True
             
             
-            ui_queue.put({"type": "screen", "message": return_header("screen_batch")})
+            ui_queue.put({"type": "screen", "message": return_header("screen_batch").strip()})
             ui_queue.put({
                 "type": "screen",
                 "message": format_weight_line(
@@ -1992,7 +2001,7 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
         if batch_context_tracker is not None:
             batch_context_tracker[f_name]["calibration"] = True
         # ui_queue.put({"type": "screen", "message": "File,\t\tTrace,\tWeight,\tDur(s),\tTime"})
-        ui_queue.put({"type": "screen", "message": return_header("screen_batch")})
+        ui_queue.put({"type": "screen", "message": return_header("screen_batch").strip()})
 
     # ------------------
     # Automatic measurements from single file
