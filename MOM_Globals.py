@@ -18,6 +18,7 @@ VERSION = "v14(2026-02-06)"  # Cleand up Batch code and added a review button to
 VERSION = "v15(2026-02-07)"  # Cleaned output from Batch operations, more failure info, timer for elasped time to run the batch ops
 VERSION = "v16(2026-02-07)"  # After Code Review, Tk thread protection, Data Race in Calibration, Files processed counter, UI conisistncy, removed dead code, did not fix baseline calib issue. will do next versoin
 VERSION = "v18(2026-02-11)"  # cleaned up output formats for MOM weights
+VERSION = "v19(2026-02-12)"  # Change output formats, consolidated coding for output format, do drift check for batch processing
 
 vAppName = "Mass-O-Matic Analyzer " + VERSION
 
@@ -86,3 +87,4 @@ max_length_secs = 20  # maximum length of time (seconds) to allow in automatic p
 sampling_rate = 60
 max_length_auto = sampling_rate *  max_length_secs # maximum number of data points to allow in automatic processing mode - auto_one_file()
 r2_threshold_auto = 0.9999  # minimum R^2 value to allow in automatic processing mode - auto_one_file() - was 0.99999, relaxed to 0.9999 to allow more files to be processed, but can adjust as needed based on results and user preference
+drift_Alarm = 2.0 # if difference betwen teh medium calibration weights between days is greater than this flag it for the user to review

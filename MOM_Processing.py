@@ -254,15 +254,15 @@ def old_format_weight_line(fname, counter, weight, duration, dtime, type ="scree
             dtime=dtime
         )
 
-def format_weight_line(fname, counter, weight, duration, dtime, type="screen"):
+def format_weight_line(fname, counter, weight, duration, dtime, trace_type="Unk", type="screen"):
     if type == "screen":
-        return "{fname},\t\t{counter},\t{dtime},\t\t{duration},\t{weight}".format(
-            fname=fname, counter=counter, weight=weight, duration=duration, dtime=dtime
+        return "{fname},\t\t{counter},\t{dtime},\t\t{duration},\t{weight},\t{trace_type}".format(
+            fname=fname, counter=counter, weight=weight, duration=duration, dtime=dtime, trace_type=trace_type
         )
 
     if type == "csv":
-        return "{fname},{counter},{dtime},{duration},{weight}".format(
-            fname=fname, counter=counter, weight=weight, duration=duration, dtime=dtime
+        return "{fname},{counter},{dtime},{duration},{weight},{trace_type}".format(
+            fname=fname, counter=counter, weight=weight, duration=duration, dtime=dtime, trace_type=trace_type
         )
 
     if type == "csv_short":
@@ -412,28 +412,71 @@ def Calculate_Batch_Summary(f_path, Time_AM=7, Time_PM=20):
 
     # Time thresholds - defined as default, later as pref
 
-    # Parse Date column and compute hour
-    if "Date" not in df.columns:
-        raise ValueError("Batch file must contain a 'Date' column with datetime strings.")
-    df["_dt"] = pd.to_datetime(df["Date"], errors="coerce")
-    df["_hour"] = df["_dt"].dt.hour
+    # Prefer explicit Type-based counts when available.
+    if "Type" in df.columns:
+        type_series = df["Type"].astype(str).str.strip()
+        bird_mask = type_series == "Bird"
+        day_mask = type_series.isin(["Day_Weight", "Cal_Low", "Cal_Med", "Cal_Hi"])
+        bird_counts = df[bird_mask].groupby("File").size()
+        day_counts = df[day_mask].groupby("File").size()
+    else:
+        # Backward compatibility for older summary files with date columns.
+        date_col = None
+        for candidate in ["Date", "Date Time", "dtTime", "Datetime", "dtime"]:
+            if candidate in df.columns:
+                date_col = candidate
+                break
+        if date_col is None:
+            raise ValueError(
+                "Batch file must contain either a 'Type' column or a datetime column "
+                "('Date', 'Date Time', 'dtTime', 'Datetime', or 'dtime')."
+            )
 
-    bird_mask = (df["_hour"] < Time_AM) | (df["_hour"] >= Time_PM)
-    bird_counts = df[bird_mask].groupby("File").size()
-    day_mask = (df["_hour"] >= Time_AM) & (df["_hour"] < Time_PM)
-    day_counts = df[day_mask].groupby("File").size()
+        df["_dt"] = pd.to_datetime(df[date_col], errors="coerce")
+        df["_hour"] = df["_dt"].dt.hour
+
+        bird_mask = (df["_hour"] < Time_AM) | (df["_hour"] >= Time_PM)
+        bird_counts = df[bird_mask].groupby("File").size()
+        day_mask = (df["_hour"] >= Time_AM) & (df["_hour"] < Time_PM)
+        day_counts = df[day_mask].groupby("File").size()
 
     # Long entries: any field containing "Too_Long" (case-insensitive)
     long_mask = df.apply(lambda row: row.astype(str).str.contains("too_long", case=False, na=False).any(), axis=1)
     long_counts = df[long_mask].groupby("File").size()
 
-    # Calibration problems: any field containing "Calib" (case-insensitive)
-    calib_mask = df.apply(lambda row: row.astype(str).str.contains("calib", case=False, na=False).any(), axis=1)
+    # Calibration problems: explicit failure markers, not calibration-weight rows.
+    calib_mask = df.apply(
+        lambda row: row.astype(str).str.contains("Calibration_failed|Bad Calibration", case=False, na=False, regex=True).any(),
+        axis=1
+    )
     calib_counts = df[calib_mask].groupby("File").size()
 
     # Other problems: any field containing "problem_redo_manually" (case-insensitive)
     other_mask = df.apply(lambda row: row.astype(str).str.contains("problem", case=False, na=False).any(), axis=1)
     other_counts = df[other_mask].groupby("File").size()
+
+    # Per-file calibration drift based on first and last Cal_Med row.
+    weight_col = None
+    for candidate in ["Weight", "Wt_Min_Grav", "wMinSlopeG"]:
+        if candidate in df.columns:
+            weight_col = candidate
+            break
+
+    cal_diff_map = {}
+    if ("Type" in df.columns) and (weight_col is not None):
+        typed_df = df.copy()
+        typed_df["_weight"] = pd.to_numeric(typed_df[weight_col], errors="coerce")
+        for f in unique_files:
+            cal_med_rows = typed_df[(typed_df["File"] == f) & (typed_df["Type"] == "Cal_Med") & typed_df["_weight"].notna()]
+            if len(cal_med_rows) >= 2:
+                first_w = float(cal_med_rows.iloc[0]["_weight"])
+                last_w = float(cal_med_rows.iloc[-1]["_weight"])
+                cal_diff_map[f] = round(abs(last_w - first_w), 3)
+            else:
+                cal_diff_map[f] = np.nan
+    else:
+        for f in unique_files:
+            cal_diff_map[f] = np.nan
 
     Batch_Summary_df = pd.DataFrame({
         "File": unique_files,
@@ -442,7 +485,8 @@ def Calculate_Batch_Summary(f_path, Time_AM=7, Time_PM=20):
         "Too_Long": [int(long_counts.get(f, 0)) for f in unique_files],
         "Day_Weights": [int(day_counts.get(f, 0)) for f in unique_files],
         "Calib_Problem": [int(calib_counts.get(f, 0)) for f in unique_files],
-        "Other_Redo_Problem": [int(other_counts.get(f, 0)) for f in unique_files]
+        "Other_Redo_Problem": [int(other_counts.get(f, 0)) for f in unique_files],
+        "Cal_Diff": [cal_diff_map.get(f, np.nan) for f in unique_files]
     })
 
     def classify_summary(row):
@@ -459,6 +503,12 @@ def Calculate_Batch_Summary(f_path, Time_AM=7, Time_PM=20):
         return "No_Visits"
 
     Batch_Summary_df["Summary"] = Batch_Summary_df.apply(classify_summary, axis=1)
+    drift_alarm = float(getattr(MOM_Globals, "drift_Alarm", 2))
+    drift_mask = Batch_Summary_df["Cal_Diff"].notna() & (Batch_Summary_df["Cal_Diff"] > drift_alarm)
+    Batch_Summary_df.loc[drift_mask, "Summary"] = Batch_Summary_df.loc[drift_mask].apply(
+        lambda row: f"{row['Summary']}, Drift = {row['Cal_Diff']}",
+        axis=1
+    )
 
     print(Batch_Summary_df.head(5))
     return Batch_Summary_df
@@ -507,23 +557,92 @@ def return_header(header_type):
 
     match header_type:
         case "standard":
-            return "\tFile,Trace#,dtTime,Pts_All,Pts_Min,Wt_Mean,Wt_Mn_Grav,Wt_Med,Wt_Min_Slope,Wt_Min_Grav,Slope,Min_Slope,Start_All,End_All,Start_Win,End_Win,Baseline,r2,Cal_Slope,Cal_Intcpt\n"
+            return "\tFile,Trace#,dtTime,Pts_All,Pts_Min,Wt_Mean,Wt_Mn_Grav,Wt_Med,Wt_Min_Slope,Wt_Min_Grav,Slope,Min_Slope,Start_All,End_All,Start_Win,End_Win,Baseline,r2,Cal_Slope,Cal_Intcpt,Type\n"
         case "diagnostic":
-            return "\tFile,Trace#,dtTime,Pts_All,Pts_Min,Wt_Mean,Wt_Mn_Grav,Wt_Med,Wt_Min_Slope,Wt_Min_Grav,Slope,Min_Slope,d_nXSTD,d_STD,d_PctAbove,d_PctBelow,d_PctAboveX,d_PctBelowX,d_PctBelowBase,d_LongAbove,d_LongBelow\n"
+            return "\tFile,Trace#,dtTime,Pts_All,Pts_Min,Wt_Mean,Wt_Mn_Grav,Wt_Med,Wt_Min_Slope,Wt_Min_Grav,Slope,Min_Slope,d_nXSTD,d_STD,d_PctAbove,d_PctBelow,d_PctAboveX,d_PctBelowX,d_PctBelowBase,d_LongAbove,d_LongBelow,Type\n"
         case "none":
             return ""
         case "short": #used for CSV
-            return "\tFile,Trace#,dtTime,Pts_All,Pts_Calc,Wt_Min_Grav\n"
+            return "\tFile,Trace#,dtTime,Dur(s),Wt_Min_Grav,Type\n"
         case "old_screen":
             return "\tFile,\t\tTrace,\tWeight,\tDur(s),\tTime\n"
         case "screen":
             # return "\tFile,\t\tTime,\t\tTrace,\tWeight,\tDur(s)\n"
-            return "\tFile,\t\tTrace,\t\tTime,\tDur(s),\tWeight\n"
+            return "\tFile,\t\tTrace,\t\tTime,\tDur(s),\tWeight,\tType\n"
         case "screen_batch":
             # return "File,\t\tTime,\t\tTrace,\tWeight,\tDur(s)\n"
-            return "File,\t\tTrace,\t\tTime,\tDur(s),\tWeight\n"
+            return "File,\t\tTrace,\t\tTime,\tDur(s),\tWeight,\tType\n"
         case _:
             return "\tFile,Trace#,dtTime,Pts_All,Pts_Min,Wt_Mean,Wt_Mn_Grav,Wt_Med,Wt_Min_Slope,Wt_Min_Grav,Slope,Min_Slope,Start_All,End_All,Start_Win,Start_End,Baseline\n"
+
+
+def get_trace_type(f_name, counter, datetime,
+                   start_index, end_index,
+                   window_start_index, window_end_index,
+                   weight_mean, weight_mean_gravity, weight_median, weight_min_slope, weight_min_slope_gravity,
+                   baseline_mean, d_nXSTD, d_STD, d_PctAbove, d_PctBelow, d_PctAboveX, d_Pct_BelowX, d_PctBelowBase, d_LongAbove, d_LongBelow,
+                   slope, min_slope,
+                   output_frame_text,
+                   include_header=False, write_output_to_screen=True, output_diagnostic=False, output_long=False):
+    try:
+        weight_value = float(weight_min_slope_gravity)
+    except (TypeError, ValueError):
+        return "Unk"
+
+    try:
+        dt_value = pd.to_datetime(datetime)
+    except Exception:
+        return "Unk"
+
+    start_night = int(getattr(MOM_Globals, "start_night", 2000))
+    start_day = int(getattr(MOM_Globals, "start_day", 700))
+    hhmm = dt_value.hour * 100 + dt_value.minute
+
+    # Night windows usually cross midnight (e.g., 2000 -> 0700).
+    if start_night <= start_day:
+        is_night = (hhmm > start_night) and (hhmm < start_day)
+    else:
+        is_night = (hhmm > start_night) or (hhmm < start_day)
+    is_day = not is_night
+
+    # 1) Night bird window
+    if is_night and (weight_value > 30) and (weight_value < 70):
+        return "Bird"
+
+    # 2) Daytime calibration/day classes
+    if is_day:
+        cal_year = int(getattr(MOM_Globals, "calib_Year", dt_value.year))
+        low = med = hi = None
+
+        calib_by_year = getattr(MOM_Globals, "CALIBRATION_BY_YEAR", {})
+        if cal_year in calib_by_year:
+            low, med, hi = calib_by_year[cal_year]
+        elif hasattr(MOM_Globals, "get_calibration_values_for_year"):
+            try:
+                low, med, hi = MOM_Globals.get_calibration_values_for_year(cal_year)
+            except Exception:
+                low = med = hi = None
+        else:
+            low = getattr(MOM_Globals, "calibLow", None)
+            med = getattr(MOM_Globals, "calibMed", None)
+            hi = getattr(MOM_Globals, "calibHi", None)
+
+        try:
+            low = float(low)
+            med = float(med)
+            hi = float(hi)
+            if abs(weight_value - low) <= 1.0:
+                return "Cal_Low"
+            if abs(weight_value - med) <= 1.0:
+                return "Cal_Med"
+            if abs(weight_value - hi) <= 1.0:
+                return "Cal_Hi"
+        except (TypeError, ValueError):
+            pass
+
+        return "Day_Weight"
+
+    return "Unk"
 
     
 #######
@@ -556,8 +675,39 @@ def output_weights(f_name, counter, datetime,
                    baseline_mean, d_nXSTD, d_STD, d_PctAbove, d_PctBelow, d_PctAboveX, d_Pct_BelowX, d_PctBelowBase, d_LongAbove, d_LongBelow,
                    slope, min_slope,
                    output_frame_text, 
-                   include_header=False, write_output_to_screen=True, output_diagnostic=False, output_long=False):
+                   include_header=False, write_output_to_screen=True, output_diagnostic=False, output_long=False, ui_queue=None):
     output_string = ""
+    trace_type = get_trace_type(
+        f_name=f_name,
+        counter=counter,
+        datetime=datetime,
+        start_index=start_index,
+        end_index=end_index,
+        window_start_index=window_start_index,
+        window_end_index=window_end_index,
+        weight_mean=weight_mean,
+        weight_mean_gravity=weight_mean_gravity,
+        weight_median=weight_median,
+        weight_min_slope=weight_min_slope,
+        weight_min_slope_gravity=weight_min_slope_gravity,
+        baseline_mean=baseline_mean,
+        d_nXSTD=d_nXSTD,
+        d_STD=d_STD,
+        d_PctAbove=d_PctAbove,
+        d_PctBelow=d_PctBelow,
+        d_PctAboveX=d_PctAboveX,
+        d_Pct_BelowX=d_Pct_BelowX,
+        d_PctBelowBase=d_PctBelowBase,
+        d_LongAbove=d_LongAbove,
+        d_LongBelow=d_LongBelow,
+        slope=slope,
+        min_slope=min_slope,
+        output_frame_text=output_frame_text,
+        include_header=include_header,
+        write_output_to_screen=write_output_to_screen,
+        output_diagnostic=output_diagnostic,
+        output_long=output_long
+    )
 
     # Add CSV header line before data line, if requested  
     if include_header:
@@ -568,7 +718,7 @@ def output_weights(f_name, counter, datetime,
 
     if output_long:  # Format data for CSV output
          # NOTE header line appended just before string here, if it's been added to output_string already
-        output_string = output_string + "\t{fname},{counter},{dtime},{samples},{samplesMinSlope},{wMean},{wMeanG},{wMedian},{wMinSlope},{wMinSlopeG},{slope},{minSlope},{startIndex},{endIndex},{windowStartIndex},{windowEndIndex},{baselineMean}, {d_nXSTD},{d_STD},{d_PctAbove}\n".format(fname=f_name, 
+        output_string = output_string + "\t{fname},{counter},{dtime},{samples},{samplesMinSlope},{wMean},{wMeanG},{wMedian},{wMinSlope},{wMinSlopeG},{slope},{minSlope},{startIndex},{endIndex},{windowStartIndex},{windowEndIndex},{baselineMean}, {d_nXSTD},{d_STD},{d_PctAbove},{trace_type}\n".format(fname=f_name, 
                                                                                                                                                                                                                                                             counter=counter,
                                                                                                                                                                                                                                                             dtime=datetime,
                                                                                                                                                                                                                                                             samples=(end_index-start_index+1),
@@ -587,7 +737,8 @@ def output_weights(f_name, counter, datetime,
                                                                                                                                                                                                                                                             baselineMean=baseline_mean,
                                                                                                                                                                                                                                                             d_nXSTD=d_nXSTD,
                                                                                                                                                                                                                                                             d_STD = d_STD,
-                                                                                                                                                                                                                                                            d_PctAbove = d_PctAbove)
+                                                                                                                                                                                                                                                            d_PctAbove = d_PctAbove,
+                                                                                                                                                                                                                                                            trace_type=trace_type)
     
     else:
         output_string += "\t" + format_weight_line(
@@ -596,6 +747,7 @@ def output_weights(f_name, counter, datetime,
         dtime=datetime,
         duration=round((end_index - start_index + 1) / MOM_Globals.sampling_rate, 1),
         weight=round(weight_min_slope_gravity, 2),
+        trace_type=trace_type,
         type="csv"
         ) + "\n"
 
@@ -632,8 +784,9 @@ def output_weights(f_name, counter, datetime,
             fname=f_name,
             counter=counter,
             weight=round(weight_min_slope_gravity, 2),
-            duration=round(((end_index - start_index + 1) / 60), 2),
+            duration=round(((end_index - start_index + 1) / MOM_Globals.sampling_rate), 2),
             dtime=datetime,
+            trace_type=trace_type,
             type="screen",
         ) + "\n"
 
@@ -641,13 +794,16 @@ def output_weights(f_name, counter, datetime,
         screen_string = screen_string ### + output_string
 
         # Configure the regular font to stay consistent across machines    
-        output_frame_text.tag_configure("regular", font=("TkDefaultFont", 10))
-        # Set frame to writable state
-        output_frame_text.configure(state="normal")
-        # Write formatted CSV data (and/or header line, if it was added to the string)
-        output_frame_text.insert("end", screen_string, "regular") # replaced output_string with screen_string
-        # Set frame back to read-only state
-        output_frame_text.configure(state="disabled")
+        if output_frame_text is not None:
+            output_frame_text.tag_configure("regular", font=("TkDefaultFont", 10))
+            # Set frame to writable state
+            output_frame_text.configure(state="normal")
+            # Write formatted CSV data (and/or header line, if it was added to the string)
+            output_frame_text.insert("end", screen_string, "regular")
+            # Set frame back to read-only state
+            output_frame_text.configure(state="disabled")
+        elif ui_queue is not None:
+            ui_queue.put({"type": "screen", "message": screen_string.strip()})
         
     if output_diagnostic == True:
         #output withe diagnostics
@@ -659,7 +815,7 @@ def output_weights(f_name, counter, datetime,
             output_string = return_header("diagnostic")
             # diag_string = "\tFile,Trace_Segment_Num,Datetime,Samples,Sample_Min_Slope,Weight_Mean,Weight_Median,Weight_Min_Slope,Slope,Min_Slope,d_nXSTD,d_STD,d_PctAbove,d_PctBelow,d_PctAboveX,d_PctBelowX,d_PctBelowBase,d_LongAbove,d_LongBelow\n"
 
-        output_string = output_string + "\t{fname},{counter},{dtime},{samples},{samplesMinSlope},{wMean},{wMeanG},{wMedian},{wMinSlope},{wMinSlopeG},{slope},{minSlope},{d_nXSTD},{d_STD},{d_PctAbove},{d_PctBelow},{d_PctAboveX},{d_Pct_BelowX},{d_PctBelowBase},{d_LongAbove},{d_LongBelow}\n".format(fname=f_name, 
+        output_string = output_string + "\t{fname},{counter},{dtime},{samples},{samplesMinSlope},{wMean},{wMeanG},{wMedian},{wMinSlope},{wMinSlopeG},{slope},{minSlope},{d_nXSTD},{d_STD},{d_PctAbove},{d_PctBelow},{d_PctAboveX},{d_Pct_BelowX},{d_PctBelowBase},{d_LongAbove},{d_LongBelow},{trace_type}\n".format(fname=f_name, 
                                                                                                                                                                                                                                                                                                     counter=counter,
                                                                                                                                                                                                                                                                                                     dtime=datetime,
                                                                                                                                                                                                                                                                                                     samples=(end_index-start_index+1),
@@ -679,7 +835,8 @@ def output_weights(f_name, counter, datetime,
                                                                                                                                                                                                                                                                                                     d_Pct_BelowX = d_Pct_BelowX, 
                                                                                                                                                                                                                                                                                                     d_PctBelowBase = d_PctBelowBase, 
                                                                                                                                                                                                                                                                                                     d_LongAbove = d_LongAbove, 
-                                                                                                                                                                                                                                                                                                    d_LongBelow = d_LongBelow
+                                                                                                                                                                                                                                                                                                    d_LongBelow = d_LongBelow,
+                                                                                                                                                                                                                                                                                                    trace_type=trace_type
                                                                                                                                                                                                                                                                                                     )
 
     # Return the formatted string, even if we did not write to GUI
@@ -984,7 +1141,7 @@ def run_weights(dat, calibration,
                 baseline_mean, 
                 f_name, counter, 
                 output_frame_text, 
-                include_header=False, write_output_to_screen=True, do_diagnostic = False):
+                include_header=False, write_output_to_screen=True, do_diagnostic = False, ui_queue=None):
     
     # Call weight calculation functions
     weight_mean, slope = MOM_Calculations.w_mean(dat, calibration, start_index, end_index, baseline_mean)
@@ -1032,7 +1189,8 @@ def run_weights(dat, calibration,
                                             min_slope=min_slope,
                                             output_frame_text=output_frame_text,
                                             include_header=include_header,
-                                            write_output_to_screen=write_output_to_screen)
+                                            write_output_to_screen=write_output_to_screen,
+                                            ui_queue=ui_queue)
     
     # if you wanted to save ethis string, you could save the return value from this function
     if False:
@@ -1775,14 +1933,15 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
             fail_reason = "Calibration_failed_R2_is_{:.5f}".format(float(calibration.regression_rsquared))
         else:
             fail_reason = "Calibration_failed_R2_is_NA"
-        fail_line = "\t{fname},{counter},{dtime},{samples},{samplesMinSlope},{wMinSlopeG}\n".format(
+        fail_line = "\t" + format_weight_line(
             fname=f_name,
             counter=0,
             dtime=first_time,
-            samples=0,
-            samplesMinSlope=0,
-            wMinSlopeG=fail_reason
-        )
+            duration=0,
+            weight=fail_reason,
+            trace_type="Unk",
+            type="csv"
+        ) + "\n"
         # Output calibration info to GUI
         if write_output_to_screen and output_frame_text is not None:
             output_calibration(calibration, output_frame_text)
@@ -1801,6 +1960,17 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
             
             
             ui_queue.put({"type": "screen", "message": return_header("screen_batch")})
+            ui_queue.put({
+                "type": "screen",
+                "message": format_weight_line(
+                    fname=f_name,
+                    counter=0,
+                    dtime=first_time,
+                    duration=0,
+                    weight=fail_reason,
+                    trace_type="Unk"
+                )
+            })
             # ui_queue.put({"type": "screen", "message": "File,\t\tTrace,\tWeight,\tDur(s),\tTime"})
         return [fail_line]
     else:
@@ -1988,26 +2158,29 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
                     trace_counter,
                     output_frame_text,
                     include_header=False,
-                    write_output_to_screen=write_output_to_screen
+                    write_output_to_screen=write_output_to_screen,
+                    ui_queue=ui_queue
                 )
             except Exception as e:
                 print("Error occurred:", e)
                 dtime = dat.loc[int((start+end)/2), "Datetime"] if len(dat) > 0 else "NA"
-                wt_info = "\t{fname},{counter},{dtime},{samples},{wMinSlopeG}\n".format(
+                wt_info = "\t" + format_weight_line(
                     fname=f_name,
                     counter=trace_counter,
                     dtime=dtime,
-                    samples=window_len,
-                    samplesMinSlope=window_len,
-                    wMinSlopeG="problem"
-                )
+                    duration=round(window_len / MOM_Globals.sampling_rate, 1),
+                    weight="problem",
+                    trace_type="Unk",
+                    type="csv"
+                ) + "\n"
                 if write_output_to_screen and output_frame_text is not None:
                     screen_string = "\t" + format_weight_line(
                         fname=f_name,
                         counter=trace_counter,
                         weight="problem",
-                        duration=round(window_len / 60, 2),
-                        dtime=dtime
+                        duration=round(window_len / MOM_Globals.sampling_rate, 2),
+                        dtime=dtime,
+                        trace_type="Unk"
                     ) + "\n"
                     output_frame_text.tag_configure("regular", font=("TkDefaultFont", 10))
                     output_frame_text.configure(state="normal")
@@ -2020,8 +2193,9 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
                             fname=f_name,
                             counter=trace_counter,
                             weight="problem",
-                            duration=round(window_len / 60, 2),
-                            dtime=dtime
+                            duration=round(window_len / MOM_Globals.sampling_rate, 2),
+                            dtime=dtime,
+                            trace_type="Unk"
                         )
                     })
             
@@ -2040,7 +2214,10 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
 
                 # get the 10th value (weight_min_slope_gravity) to put toward the graphing
                 values = wt_info.split(',')
-                if len(values) >= 10:
+                if len(values) >= 5:
+                    weight_min_slope_gravity = values[4].strip()
+                    measure = round(float(weight_min_slope_gravity), 2) # Convert to float and round
+                elif len(values) >= 10:
                     weight_min_slope_gravity = values[9].strip()
                     measure = round(float(weight_min_slope_gravity), 2) # Convert to float and round
             
@@ -2054,14 +2231,15 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
         else:
             # too-long trace: keep CSV structure but flag weight as Too long
             dtime = dat.loc[int((start+end)/2), "Datetime"]
-            formatted_output.append("\t{fname},{counter},{dtime},{samples},{wMinSlopeG}\n".format(
+            formatted_output.append("\t" + format_weight_line(
                 fname=f_name,
                 counter=trace_counter,
                 dtime=dtime,
-                samples=window_len,
-                samplesMinSlope=window_len,
-                wMinSlopeG="Too_Long"
-            ))
+                duration=round(window_len / MOM_Globals.sampling_rate, 1),
+                weight="Too_Long",
+                trace_type="Unk",
+                type="csv"
+            ) + "\n")
 
             # also write a screen line similar to output_weights when requested
             if write_output_to_screen and output_frame_text is not None:
@@ -2069,13 +2247,26 @@ def auto_one_file(f_path, calibration, calibration_user_entered_values, output_f
                     fname=f_name,
                     counter=trace_counter,
                     weight="Too_Long",
-                    duration=round(window_len / 60, 2),
-                    dtime=dtime
+                    duration=round(window_len / MOM_Globals.sampling_rate, 2),
+                    dtime=dtime,
+                    trace_type="Unk"
                 ) + "\n"
                 output_frame_text.tag_configure("regular", font=("TkDefaultFont", 10))
                 output_frame_text.configure(state="normal")
                 output_frame_text.insert("end", screen_string, "regular")
                 output_frame_text.configure(state="disabled")
+            elif ui_queue is not None:
+                ui_queue.put({
+                    "type": "screen",
+                    "message": format_weight_line(
+                        fname=f_name,
+                        counter=trace_counter,
+                        weight="Too_Long",
+                        duration=round(window_len / MOM_Globals.sampling_rate, 2),
+                        dtime=dtime,
+                        trace_type="Unk"
+                    )
+                })
 
             if(show_graph):
                 # still need to increment the trace counter on the figure
@@ -2209,26 +2400,6 @@ def on_close():
     if progress_window is not None:
         progress_window.destroy()
 
-def format_batch_screen_line(formatted_line):
-    parts = [p.strip() for p in formatted_line.split(",")]
-    if len(parts) < 5:
-        return None
-    try:
-        duration = round(float(parts[3]), 2)
-    except (ValueError, TypeError):
-        duration = "NA"
-    # Support both short CSV formats:
-    # 5 fields: fname,counter,dtime,duration,weight
-    # 6 fields: fname,counter,dtime,samples,samplesMinSlope,weight
-    weight_index = 4 if len(parts) == 5 else 5
-    return format_weight_line(
-        fname=parts[0],
-        counter=parts[1],
-        weight=parts[weight_index],
-        duration=duration,
-        dtime=parts[2],
-    )
-
 ##############
 #    process_auto_batch_2
 #       a subset of original fuction: process_auto(calibration, calibration_user_entered_values, output_frame_text, show_graph = True):
@@ -2285,7 +2456,7 @@ def process_auto_batch_2(calibration, calibration_user_entered_values, output_fr
                         calibration_user_entered_values,
                         None,
                         show_graph=False,
-                        write_output_to_screen=False,
+                        write_output_to_screen=True,
                         ui_queue=ui_queue,
                         calibration_true_values=calibration_true_values,
                         batch_context_tracker=batch_context_tracker
@@ -2302,10 +2473,6 @@ def process_auto_batch_2(calibration, calibration_user_entered_values, output_fr
                         continue
 
                     batch_output.extend(stripped_data)
-                    for line in stripped_data:
-                        screen_line = format_batch_screen_line(line)
-                        if screen_line is not None:
-                            ui_queue.put({"type": "screen", "message": screen_line})
                 except Exception as e:
                     print("Error occurred:", e)
                     context_state = batch_context_tracker.get(filename, {"summary": False, "calibration": False})
@@ -2346,15 +2513,13 @@ def process_auto_batch_2(calibration, calibration_user_entered_values, output_fr
             batch_output_df = pd.DataFrame(batch_output, columns=['Formatted_Output'])
             if no_diagnostics:
                 if output_long:
-                    new_row = return_header("standard")
+                    new_row_text = return_header("standard").strip()
                 else:
-                    new_row = return_header("short")
-                    # new_row = {"Formatted_Output": "File,Trace,Date,Time,Pts_All,Pts_Calc,Weight"}
-                    new_row = {"Formatted_Output": "File,Trace,Date Time,Dur(s),Weight"}
+                    new_row_text = "File,Trace,Date Time,Dur(s),Weight,Type"
    
             else:
-                new_row = return_header("diagnostic")
-            new_row_df = pd.DataFrame([new_row])
+                new_row_text = return_header("diagnostic").strip()
+            new_row_df = pd.DataFrame([{"Formatted_Output": new_row_text}])
             batch_output_df = pd.concat([new_row_df, batch_output_df], ignore_index=True)
             batch_output_df.to_csv(output_file_path, index=False, header=False, sep='\t')
     except Exception as e:
