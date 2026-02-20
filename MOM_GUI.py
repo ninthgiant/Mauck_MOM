@@ -22,6 +22,7 @@
 
 import tkinter as tk
 from tkinter import messagebox
+import matplotlib.pyplot as plt
 import MOM_Processing
 import MOM_Calculations
 import MOM_Globals
@@ -221,4 +222,25 @@ def setup_gui():
 #####
 if __name__ == "__main__":
     root = setup_gui()
-    root.mainloop()
+    def on_app_close():
+        try:
+            MOM_Processing.on_close()
+        except Exception:
+            pass
+        try:
+            plt.close("all")
+        except Exception:
+            pass
+        try:
+            root.quit()
+        except tk.TclError:
+            pass
+
+    root.protocol("WM_DELETE_WINDOW", on_app_close)
+    try:
+        root.mainloop()
+    finally:
+        try:
+            root.destroy()
+        except tk.TclError:
+            pass

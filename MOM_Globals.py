@@ -19,6 +19,8 @@ VERSION = "v15(2026-02-07)"  # Cleaned output from Batch operations, more failur
 VERSION = "v16(2026-02-07)"  # After Code Review, Tk thread protection, Data Race in Calibration, Files processed counter, UI conisistncy, removed dead code, did not fix baseline calib issue. will do next versoin
 VERSION = "v18(2026-02-11)"  # cleaned up output formats for MOM weights
 VERSION = "v19(2026-02-12)"  # Change output formats, consolidated coding for output format, do drift check for batch processing
+VERSION = "v20(2026-02-20)"  # Change output formats for old-style output until 2026 - for Sam's processing in 2025
+
 
 vAppName = "Mass-O-Matic Analyzer " + VERSION
 
@@ -48,8 +50,23 @@ Time_Zone_MOM = "EST" # AST is what RFID are usually on
 ##############
 #   --- Threshold weights to flag for user to inspect manually - change as needed based on results and user preference - but not yet used
 ######
-threshold_too_low = 32.59  # example value, adjust as needed
+threshold_too_low = 32.59  # example value, adjust as needed - TO DO: update auto_one_file() to use this threshold to flag files for user review if the medium calibration weight is below this value, which may indicate a problem with the data or the calibration. also update batch processing to use this threshold to flag files for review if the medium calibration weight is below this value, which may indicate a problem with the data or the calibration. also update the review batch summary function to highlight files that are flagged for review based on this threshold, so that the user can easily identify and review those files. also update the output format for batch processing to include a column for the medium calibration weight, so that the user can see which files are flagged for review based on this threshold.
 threshold_too_high = 70.00  # example value, adjust as needed
+
+#############
+#   --- Output format options - change as needed based on user preference - but not yet used - after 2025 use short format for everything
+######
+output_short_default = False  # if True, use short output format for on-screen display and csv output
+output_long_default = True  
+# Year-based output policy cutoffs:
+# - years <= OUTPUT_POLICY_STANDARD_YEAR_MAX force standard CSV and non-batch screen output
+# - years >= OUTPUT_POLICY_CURRENT_FORMS_YEAR_MIN keep current output behavior
+OUTPUT_POLICY_STANDARD_YEAR_MAX = 2025
+OUTPUT_POLICY_CURRENT_FORMS_YEAR_MIN = 2026
+
+
+
+
 
 ##############
 #   --- Calibration weights to be used as Default calib values (self.cal1_true...) in line 36+ of MOM_Calculations
