@@ -7,6 +7,11 @@
 #######################################
 
 ##############
+#   --- Imports here - only import modules that are needed for the global variables and constants defined
+##############  
+import datetime as dt
+
+##############
 #   ---Constants here
 ##############
 Current_OS = "MacOS"   # Windows, MacOS, Linux - shouldn't actually need to be used if just for Windows and MacOS
@@ -20,6 +25,7 @@ VERSION = "v16(2026-02-07)"  # After Code Review, Tk thread protection, Data Rac
 VERSION = "v18(2026-02-11)"  # cleaned up output formats for MOM weights
 VERSION = "v19(2026-02-12)"  # Change output formats, consolidated coding for output format, do drift check for batch processing
 VERSION = "v20(2026-02-20)"  # Change output formats for old-style output until 2026 - for Sam's processing in 2025
+VERSION = "v22(2026-06-17)"  # Show date/time in View Window and default year fo changed in globals to 2026 - make it current year in future
 
 
 vAppName = "Mass-O-Matic Analyzer " + VERSION
@@ -77,7 +83,8 @@ CALIBRATION_BY_YEAR = {
     2025: (32.59, 50.22, 100.00),
     2026: (30.00, 50.00, 70.00),
 }
-calib_Year = 2024 #default year
+# calib_Year = 2026 #default year
+calib_Year = dt.datetime.now().year  # default year
 
 def get_calibration_year_options():
     return sorted(CALIBRATION_BY_YEAR.keys())

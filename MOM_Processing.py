@@ -986,6 +986,56 @@ def annote_current_markers(markers):
             ax.annotate(label, (index, d.loc[index, "Measure"]), rotation=60)
             
 #######
+# Function add_trace_cursor_datetime
+#   Adds a live row/date/time readout to a trace plot without changing row-index x-axis behavior.
+# Parameters:
+#   fig - matplotlib figure
+#   ax  - matplotlib axes
+#   dat - parsed trace dataframe
+# Returns: None
+#######
+def add_trace_cursor_datetime(fig, ax, dat):
+    if dat is None or len(dat) == 0 or "Datetime" not in dat.columns:
+        return
+
+    readout = ax.text(
+        0.01,
+        0.98,
+        "Move cursor over trace for date/time",
+        transform=ax.transAxes,
+        va="top",
+        ha="left",
+        fontsize=9,
+        bbox={"boxstyle": "round", "facecolor": "white", "alpha": 0.8, "edgecolor": "0.7"},
+    )
+
+    def row_datetime_text(x_value, y_value=None):
+        try:
+            row = int(round(x_value))
+        except (TypeError, ValueError):
+            return ""
+        if row < 0 or row >= len(dat):
+            return ""
+        date_time = dat.iloc[row]["Datetime"]
+        measure = dat.iloc[row]["Measure"] if y_value is None else y_value
+        return "Time: {date_time}  Sensor: {measure:.0f}  Row: {row}".format(
+            row=row,
+            date_time=date_time,
+            measure=measure,
+        )
+
+    def on_motion(event):
+        if event.inaxes != ax or event.xdata is None:
+            return
+        text = row_datetime_text(event.xdata)
+        if text:
+            readout.set_text(text)
+            fig.canvas.draw_idle()
+
+    ax.format_coord = lambda x, y: row_datetime_text(x, y)
+    fig.canvas.mpl_connect("motion_notify_event", on_motion)
+
+#######
 # Function get_trace_point_pair
 #   Ask the user to select two points on an interactive pyplot window
 # Parameters:
@@ -999,6 +1049,7 @@ def annote_current_markers(markers):
 #   Markers added by user (list of DraggableMarkerPair)
 #   Axes limits from when the plot closed (MOM_Processing.AxesLimits) 
 #######
+
 def get_trace_point_pair(dat, category, markers=None, axes_limits=None):
 
     # Boot up interactive plot
@@ -1006,6 +1057,7 @@ def get_trace_point_pair(dat, category, markers=None, axes_limits=None):
     fig, ax = plt.subplots()
     fig.set_size_inches((PLOT_VIEWER_WIDTH, PLOT_VIEWER_HEIGHT))
     ax.plot(dat.loc[:,"Measure"])
+    add_trace_cursor_datetime(fig, ax, dat)
 
     # Restore previous axes limits, if available
     if (axes_limits is not None):
@@ -1263,6 +1315,7 @@ def view(output_frame_text, category = "view"):
         fig, ax = plt.subplots()
         fig.set_size_inches((PLOT_VIEWER_WIDTH, PLOT_VIEWER_HEIGHT))
         ax.plot(dat.loc[:,"Measure"])
+        add_trace_cursor_datetime(fig, ax, dat)
         ax.set_title(os.path.splitext(f_name)[0])
         plt.show()
     
